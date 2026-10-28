@@ -154,6 +154,7 @@
     box-shadow: 0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25); }
   .pad .ok:active, .pad .ok.pressed { transform: scale(.95); background: var(--ok); filter: brightness(.9); }
   .lower { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: stretch; }
+  .lower > button { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
   .rocker { grid-row: span 2; display: grid; grid-template-rows: 1fr 1fr; width: 64px; border: 1px solid var(--edge); border-radius: calc(var(--btn-radius) * 2); overflow: hidden; background: var(--btn); }
   .rocker button { border: 0; border-radius: 0; background: transparent; font-size: 26px; min-height: 0; }
   .media { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
