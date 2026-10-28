@@ -41,4 +41,19 @@ object Keys {
         }
         return true
     }
+
+    /**
+     * The remote's Live TV button is meant for Google's home screen too; on Aurora's screens
+     * it opens the TV's own Live TV app. (Guide and Apps never reach apps on this TV: the
+     * system takes them first.)
+     */
+    @JvmStatic
+    fun liveTvButton(a: Activity, e: KeyEvent): Boolean {
+        if (e.keyCode != KeyEvent.KEYCODE_TV) return false
+        if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {
+            val i = a.packageManager.getLeanbackLaunchIntentForPackage(Habits.LIVE_TV) ?: return true
+            try { a.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (ignored: Exception) { }
+        }
+        return true
+    }
 }

@@ -141,7 +141,7 @@ public class GamesActivity extends Activity implements Game.Host {
     /** Held arrows move at a steady pace instead of racing across the board. */
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent e) {
-        return Keys.tooFast(e) || Keys.settingsButton(this, e) || super.dispatchKeyEvent(e);
+        return Keys.tooFast(e) || Keys.settingsButton(this, e) || Keys.liveTvButton(this, e) || super.dispatchKeyEvent(e);
     }
 
     /** After any menu closes, make sure the remote goes to the game, not nowhere. */

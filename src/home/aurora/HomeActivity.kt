@@ -507,7 +507,7 @@ class HomeActivity : Activity() {
 
     /** Remember which way the remote moved, so tiles tilt in from that side. */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
-        if (Keys.tooFast(e) || Keys.settingsButton(this, e)) return true
+        if (Keys.tooFast(e) || Keys.settingsButton(this, e) || Keys.liveTvButton(this, e)) return true
         if (e.action == KeyEvent.ACTION_DOWN) { rememberDirection(e.keyCode); WallpaperView.input() }
         return super.dispatchKeyEvent(e)
     }
