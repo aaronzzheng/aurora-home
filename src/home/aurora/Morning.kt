@@ -28,10 +28,20 @@ class Morning : BroadcastReceiver() {
         schedule(c)
         val pm = c.getSystemService(Context.POWER_SERVICE) as PowerManager
         if (pm.isInteractive) return   // someone's already watching: don't interrupt
+        // Only the background service can put the TV back to sleep; without it the TV would stay on all day.
+        if (AuroraService.instance == null) { Log.w("AuroraMorning", "service off, not waking the TV"); return }
         @Suppress("DEPRECATION")
         pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "aurora:morning").acquire(15_000)
         wokeAt = SystemClock.elapsedRealtime()
         show(c, true)
+    }
+
+    /**
+     * Alarms don't survive a reboot, and the service that also re-arms this may be off:
+     * re-arm after a boot, an update, a clock change, or the exact-alarm permission changing.
+     */
+    class Rearm : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = schedule(c)
     }
 
     class Event(@JvmField val title: String, @JvmField val start: Long, @JvmField val allDay: Boolean)
@@ -66,7 +76,9 @@ class Morning : BroadcastReceiver() {
             am.cancel(pi)
             if (!on(c)) return
             val time = next(Calendar.getInstance(), at(c), days(c))
-            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pi)
+            // An alarm clock fires on the minute even in Doze. USE_EXACT_ALARM (Android 13+) grants it
+            // without asking; on 12 it needs "Alarms & reminders", else it's merely close.
+            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setAlarmClock(AlarmManager.AlarmClockInfo(time, null), pi)
             else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pi)
             Log.i("AuroraMorning", "next morning screen ${Date(time)}")
         }
@@ -128,7 +140,7 @@ class Morning : BroadcastReceiver() {
 
         /**
          * The events in [ics] that happen on [day]: one-off events, daily, weekly,
-         * monthly and yearly repeats with INTERVAL, COUNT and UNTIL, skipped dates (EXDATE),
+         * monthly (by date, or by weekday like "2nd Tuesday") and yearly repeats with INTERVAL, COUNT and UNTIL, skipped dates (EXDATE),
          * and single occurrences that were moved or edited (RECURRENCE-ID). Plain code (tested).
          */
         @JvmStatic
@@ -252,7 +264,7 @@ class Morning : BroadcastReceiver() {
                 part.startsWith("BYDAY=") -> byDay = part.substring(6)
                 part.startsWith("INTERVAL=") -> interval = maxOf(1, part.substring(9).toInt())
                 part.startsWith("COUNT=") -> count = part.substring(6).toInt()
-                part.startsWith("UNTIL=") -> until = part.substring(6, 14).toInt()
+                part.startsWith("UNTIL=") -> until = untilDay(part.substring(6))
             }
             if (ymd(day) > until) return false
             return when (freq) {
@@ -274,10 +286,23 @@ class Morning : BroadcastReceiver() {
                     n <= count
                 }
                 "MONTHLY" -> {
-                    if (byDay != null) return false
                     val months = (day.get(Calendar.YEAR) - start.get(Calendar.YEAR)) * 12 + day.get(Calendar.MONTH) - start.get(Calendar.MONTH)
-                    day.get(Calendar.DAY_OF_MONTH) == start.get(Calendar.DAY_OF_MONTH) && months % interval == 0 &&
-                        (count < 0 || months / interval < count)
+                    if (months % interval != 0) return false
+                    if (byDay == null) {
+                        return day.get(Calendar.DAY_OF_MONTH) == start.get(Calendar.DAY_OF_MONTH) &&
+                            (count < 0 || months / interval < count)
+                    }
+                    // "2nd Tuesday", "last Friday", or every Monday of the month.
+                    if (!monthlyByDay(day, byDay)) return false
+                    if (count < 0) return true
+                    val walk = start.clone() as Calendar
+                    var n = 0
+                    for (d in 0..diff) {
+                        val m = (walk.get(Calendar.YEAR) - start.get(Calendar.YEAR)) * 12 + walk.get(Calendar.MONTH) - start.get(Calendar.MONTH)
+                        if (m % interval == 0 && monthlyByDay(walk, byDay)) n++
+                        walk.add(Calendar.DAY_OF_YEAR, 1)
+                    }
+                    n <= count
                 }
                 "YEARLY" -> {
                     val years = day.get(Calendar.YEAR) - start.get(Calendar.YEAR)
@@ -286,6 +311,33 @@ class Morning : BroadcastReceiver() {
                 }
                 else -> false   // rules this TV doesn't understand are left out rather than shown wrong
             }
+        }
+
+        /** Does [day] match a monthly BYDAY list such as "2TU", "-1FR" or "MO,WE"? */
+        private fun monthlyByDay(day: Calendar, byDay: String): Boolean {
+            val dom = day.get(Calendar.DAY_OF_MONTH)
+            val last = day.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val name = DAY_NAMES[day.get(Calendar.DAY_OF_WEEK) - 1]
+            return byDay.split(",").any { b ->
+                if (b.length < 2 || !b.endsWith(name)) return@any false
+                val n = b.dropLast(2).toIntOrNull() ?: 0
+                when {
+                    n > 0 -> (dom - 1) / 7 + 1 == n
+                    n < 0 -> (last - dom) / 7 + 1 == -n
+                    else -> true
+                }
+            }
+        }
+
+        /** UNTIL as a local yyyymmdd: a UTC time ("...T030000Z") can fall on the day before here. */
+        private fun untilDay(v: String): Int {
+            if (v.length >= 16 && v.endsWith("Z")) {
+                val f = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+                runCatching { f.parse(v) }.getOrNull()?.let { d ->
+                    return ymd(Calendar.getInstance().apply { time = d })
+                }
+            }
+            return v.substring(0, 8).toInt()
         }
 
         private fun unescape(s: String) = s.replace("\\,", ",").replace("\\;", ";").replace("\\n", " ").replace("\\\\", "\\")

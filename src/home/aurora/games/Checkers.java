@@ -19,7 +19,9 @@ public class Checkers extends Game {
     private int cr = 5, cc = 0;
     private int sel = -1;
     private final List<Integer> steps = new ArrayList<>();
-    private int lastFrom = -1, lastTo = -1, quiet;
+    private int lastFrom = -1, lastTo = -1;
+    /** Moves in a row, counting both sides, where only a king moved and nothing was taken. */
+    private int quiet;
 
     static class Move {
         final int[] path, caps;
@@ -64,8 +66,9 @@ public class Checkers extends Game {
         steps.clear();
         lastFrom = lastTo = -1;
         quiet = 0;
-        cr = turn == 1 ? 5 : 2;
-        cc = turn == 1 ? 0 : 1;
+        int me = vsCpu ? 1 : turn;   // start the cursor on the human's side, not the computer's
+        cr = me == 1 ? 5 : 2;
+        cc = me == 1 ? 0 : 1;
         info();
     }
 
@@ -162,7 +165,7 @@ public class Checkers extends Game {
     protected int winner() {
         int next = 3 - turn;
         if (moves(b, next).isEmpty()) return turn;
-        if (quiet >= 50) return 0;   // 50 king moves without a capture: draw
+        if (quiet >= 100) return 0;   // 50 moves each (100 in all) with only kings moving and nothing taken: draw
         return -1;
     }
 
@@ -219,12 +222,13 @@ public class Checkers extends Game {
         final int[] snap = b.clone();
         final int depth = level == 0 ? 1 : level == 1 ? 3 : 5;
         final boolean loose = level == 0 && Math.random() < 0.3;
+        final int g = gen;
         new Thread(() -> {
             Move best = null;
             if (loose) {
                 List<Move> all = moves(snap, 2);
                 final Move any = all.get((int) (Math.random() * all.size()));
-                post(() -> { if (cpuTurn()) commit(any); });
+                cpuDone(g, () -> commit(any));
                 return;
             }
             int bestScore = Integer.MIN_VALUE;
@@ -235,7 +239,7 @@ public class Checkers extends Game {
                 if (s > bestScore || (s == bestScore && Math.random() < 0.3)) { bestScore = s; best = m; }
             }
             final Move pick = best;
-            post(() -> { if (cpuTurn() && pick != null) commit(pick); });
+            if (pick != null) cpuDone(g, () -> commit(pick));
         }, "checkers-ai").start();
     }
 
@@ -315,7 +319,6 @@ public class Checkers extends Game {
             }
         }
 
-        if (mine) art.cursor(c, left + cc * cell, top + cr * cell, cell);
-        else postInvalidateOnAnimation();
+        if (mine) art.cursor(c, left + cc * cell, top + cr * cell, cell);   // nothing else moves: no redraw loop
     }
 }

@@ -28,7 +28,8 @@ import javax.crypto.Cipher
  *
  * A minimal ADB client: connect, sign the TV's challenge with Aurora's own key
  * (the TV asks once, "Allow debugging?"), then run `input keyevent`. It only ever
- * sends key codes chosen in [press]; nothing else is run.
+ * sends key codes chosen in [press]; nothing else is run. One shell stays open and
+ * takes each press as a line, so a press doesn't pay for a new stream every time.
  */
 class AdbLocal(private val ctx: Context) {
 
@@ -48,7 +49,7 @@ class AdbLocal(private val ctx: Context) {
         if (queued.get() > 1) { then?.invoke(false); return }
         queued.incrementAndGet()
         worker.execute {
-            val ok = try { run("input keyevent $keycode"); problem = null; true } catch (e: Exception) {
+            val ok = try { shellLine("input keyevent $keycode"); problem = null; true } catch (e: Exception) {
                 Log.w("Aurora", "adb: ${e.message}")
                 problem = e.message
                 close()
@@ -70,6 +71,13 @@ class AdbLocal(private val ctx: Context) {
     fun close() {
         try { sock?.close() } catch (ignored: Exception) { }
         sock = null; input = null; out = null
+        shellLocal = 0; shellRemote = 0
+    }
+
+    /** The service is going away: drop the connection and the worker thread. */
+    fun shutdown() {
+        worker.execute { close() }
+        worker.shutdown()
     }
 
     // ------------------------------------------------------------------ protocol
@@ -113,6 +121,41 @@ class AdbLocal(private val ctx: Context) {
     }
 
     private var triedSignature = false
+    private var shellLocal = 0
+    private var shellRemote = 0
+
+    /**
+     * Send one line to the long-lived shell, opening it first if need be. Waits only for
+     * adbd to take the line, not for the command to finish, so quick presses pipeline.
+     */
+    private fun shellLine(cmd: String) {
+        ensure()
+        if (shellRemote == 0) {
+            val local = nextId++
+            send(OPEN, local, 0, "shell:\u0000".toByteArray())
+            while (shellRemote == 0) {
+                val m = read(8000)
+                when {
+                    m.cmd == OKAY && m.arg1 == local -> { shellLocal = local; shellRemote = m.arg0 }
+                    m.cmd == CLSE && m.arg1 == local -> throw IllegalStateException("The TV refused a shell")
+                    m.cmd == WRTE -> send(OKAY, m.arg1, m.arg0, ByteArray(0))
+                }
+            }
+        }
+        send(WRTE, shellLocal, shellRemote, "$cmd\n".toByteArray())
+        while (true) {
+            val m = read(8000)
+            when {
+                m.cmd == OKAY && m.arg1 == shellLocal -> return                      // line taken
+                m.cmd == WRTE -> send(OKAY, m.arg1, m.arg0, ByteArray(0))           // prompt and echo: acknowledge, ignore
+                m.cmd == CLSE && m.arg1 == shellLocal -> {
+                    shellLocal = 0; shellRemote = 0
+                    run(cmd)   // the shell ended under us: run this one on its own
+                    return
+                }
+            }
+        }
+    }
 
     /** Run one shell command and wait for it to finish. */
     private fun run(cmd: String) {

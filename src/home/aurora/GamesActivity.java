@@ -52,8 +52,10 @@ public class GamesActivity extends Activity implements Game.Host {
                     + "CONTROLS\nArrows: move\nOK: pick up a piece, then OK on a highlighted square\n"
                     + "Double jump: pick each landing square in turn",
             "Normal chess. Put the other king in checkmate to win. White goes first. "
-                    + "A pawn that reaches the far side becomes a queen.\n\n"
-                    + "CONTROLS\nArrows: move\nOK: pick a piece (dots show where it can go)\nOK on a dot: move there",
+                    + "A pawn that reaches the far side becomes a queen, rook, bishop or knight (you choose). "
+                    + "It's a draw on stalemate, the same position three times, or 50 moves each with no capture or pawn move.\n\n"
+                    + "CONTROLS\nArrows: move\nOK: pick a piece (dots show where it can go)\nOK on a dot: move there\n"
+                    + "Promoting: Left / Right picks the piece, OK confirms",
             "Take turns drawing one line between two dots. Draw the last side of a box to win it and go again. "
                     + "Most boxes at the end wins.\n\n"
                     + "CONTROLS\nArrows: pick a box\nOK, then an arrow: draw that side of the box\nBack: cancel",
@@ -61,7 +63,7 @@ public class GamesActivity extends Activity implements Game.Host {
                     + "Finish the word before the drawing is done.\n\n"
                     + "With 2 players, one person picks the word while the other looks away, then hands over the remote.\n\n"
                     + "CONTROLS\nArrows: pick a letter\nOK: guess it",
-            "All tiles slide together. Two tiles with the same number join into one. Try to make 2048. "
+            "All tiles slide together. Two tiles with the same number join into one. Try to make 2048 (256 on the 3 × 3 grid). "
                     + "The game ends when the board is full and nothing can join.\n\n"
                     + "CONTROLS\nArrows: slide the tiles",
             "Open every square that isn't a mine. A number tells you how many mines touch that square. "
@@ -120,8 +122,21 @@ public class GamesActivity extends Activity implements Game.Host {
             play(debugGame, getIntent().getBooleanExtra("debug_cpu", true), getIntent().getIntExtra("debug_level", 1));
     }
 
-    @Override protected void onResume() { super.onResume(); Sounds.quietFor(500); Sounds.setTheme(this, sounds); if (skin.surface == null) wall.start(); }
-    @Override protected void onPause() { wall.stop(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume();
+        Sounds.quietFor(500);
+        Sounds.setTheme(this, sounds);
+        if (skin.surface == null) wall.start();
+        if (game != null) game.resume();
+    }
+
+    @Override protected void onPause() { wall.stop(); if (game != null) game.pause(); super.onPause(); }
+
+    /** Let go of the look (it can hold a full-screen bitmap), unless a newer games screen has already set its own. */
+    @Override protected void onDestroy() {
+        if (Game.skin == skin) Game.skin = null;
+        super.onDestroy();
+    }
 
     /** Held arrows move at a steady pace instead of racing across the board. */
     @Override
@@ -262,11 +277,16 @@ public class GamesActivity extends Activity implements Game.Host {
 
     /** Back during a game: a small pause menu instead of leaving straight away. */
     private void showPauseMenu() {
+        final Game g = game;
+        g.pause();   // the clock and the computer wait while a menu is up
         GlassMenu.list(this, NAMES[gameIndex], new String[]{"Resume", "How to play", "New game", "Back to games"}, which -> {
-            if (which == 1) showRules(gameIndex, () -> { if (game != null) game.requestFocus(); });
-            else if (which == 2) game.restart();
+            if (which == 1) {
+                g.pause();
+                showRules(gameIndex, () -> { g.resume(); if (game != null) game.requestFocus(); });
+            }
+            else if (which == 2) g.restart();
             else if (which == 3) showHub();
-        });
+        }).setOnDismissListener(d -> g.resume());
     }
 
     // ------------------------------------------------------------------ play

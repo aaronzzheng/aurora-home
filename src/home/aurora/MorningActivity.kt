@@ -62,7 +62,8 @@ class MorningActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        woke = intent.getBooleanExtra("woke", false)
+        // Going back to sleep needs the background service; without it, just stay up.
+        woke = intent.getBooleanExtra("woke", false) && AuroraService.instance != null
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

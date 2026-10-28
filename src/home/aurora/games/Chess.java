@@ -2,14 +2,15 @@ package home.aurora.games;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.view.KeyEvent;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /**
- * Chess with castling, en passant, check, checkmate and stalemate. Pawns promote
- * to a queen. Player 1 is White (bottom) and always moves first.
+ * Chess with castling, en passant, promotion to any piece, check, checkmate, and draws by
+ * stalemate, repetition, the 50-move rule and too little material. Player 1 is White (bottom) and always moves first.
  */
 public class Chess extends Game {
 
@@ -20,6 +21,7 @@ public class Chess extends Game {
     static final class Pos {
         int[] b = new int[64];
         int side = 1, castle = 15, ep = -1;   // castle bits: 1 WK, 2 WQ, 4 BK, 8 BQ
+        int half;                              // moves since the last capture or pawn move, for the 50-move rule
 
         Pos copy() {
             Pos p = new Pos();
@@ -27,7 +29,19 @@ public class Chess extends Game {
             p.side = side;
             p.castle = castle;
             p.ep = ep;
+            p.half = half;
             return p;
+        }
+
+        /** Same key = same position for repetition: pieces, side to move, castling, and an en passant that could be taken. */
+        long key() {
+            long h = side * 31L + castle;
+            for (int v : b) h = h * 1_000_003L + v;
+            if (ep >= 0) {
+                int pawn = side * 8 + P, r = ep / 8 + (side == 1 ? 1 : -1), c = ep % 8;
+                if ((c > 0 && b[r * 8 + c - 1] == pawn) || (c < 7 && b[r * 8 + c + 1] == pawn)) h = h * 131 + ep + 1;
+            }
+            return h;
         }
     }
 
@@ -38,6 +52,14 @@ public class Chess extends Game {
 
     private Pos pos;
     private int cr = 6, cc = 4, sel = -1, lastFrom = -1, lastTo = -1;
+    /** The selected piece's legal moves, worked out once when it's picked up, not every frame. */
+    private List<Move> selMoves = new ArrayList<>();
+    /** Positions so far this game, for threefold repetition. */
+    private final List<Long> seen = new ArrayList<>();
+    /** A pawn has reached the last row: choosing what it becomes (index into PROMOS), or null. */
+    private List<Move> promoting;
+    private int promoPick;
+    private static final int[] PROMOS = {Q, R, B, N};
     private final BoardArt art = new BoardArt(this);
 
     public Chess(Context c) {
@@ -59,6 +81,10 @@ public class Chess extends Game {
             pos.b[56 + c] = 8 + back[c];
         }
         sel = lastFrom = lastTo = -1;
+        selMoves = new ArrayList<>();
+        promoting = null;
+        seen.clear();
+        seen.add(pos.key());
         cr = 6; cc = 4;
         if (host != null) host.onInfo("White moves first");
     }
@@ -94,14 +120,14 @@ public class Chess extends Game {
                     int dir = me == 1 ? -1 : 1, start = me == 1 ? 6 : 1, last = me == 1 ? 0 : 7;
                     int f = (r + dir) * 8 + c;
                     if (on(r + dir, c) && p.b[f] == 0) {
-                        out.add(new Move(sq, f, r + dir == last ? Q : 0));
+                        pawnTo(sq, f, r + dir == last, out);
                         int f2 = (r + 2 * dir) * 8 + c;
                         if (r == start && p.b[f2] == 0) out.add(new Move(sq, f2, 0));
                     }
                     for (int dc = -1; dc <= 1; dc += 2) {
                         if (!on(r + dir, c + dc)) continue;
                         int x = (r + dir) * 8 + c + dc;
-                        if (owner(p.b[x]) == them || x == p.ep) out.add(new Move(sq, x, r + dir == last ? Q : 0));
+                        if (owner(p.b[x]) == them || x == p.ep) pawnTo(sq, x, r + dir == last, out);
                     }
                     break;
                 }
@@ -126,6 +152,12 @@ public class Chess extends Game {
             }
         }
         return out;
+    }
+
+    /** A pawn move; on the last row, one move per piece it could become. */
+    private static void pawnTo(int from, int to, boolean promotes, List<Move> out) {
+        if (!promotes) { out.add(new Move(from, to, 0)); return; }
+        for (int t : PROMOS) out.add(new Move(from, to, t));
     }
 
     private static void steps(Pos p, int sq, int[][] dirs, boolean slide, List<Move> out) {
@@ -188,6 +220,7 @@ public class Chess extends Game {
             n.b[rookFrom] = 0;
         }
         n.ep = t == P && Math.abs(m.to - m.from) == 16 ? (m.from + m.to) / 2 : -1;
+        n.half = t == P || p.b[m.to] != 0 ? 0 : p.half + 1;
         if (t == K) n.castle &= me == 1 ? ~3 : ~12;
         for (int sq : new int[]{m.from, m.to}) {
             if (sq == 63) n.castle &= ~1;
@@ -199,23 +232,29 @@ public class Chess extends Game {
         return n;
     }
 
+    /** Nobody can mate: a lone minor piece, or only bishops and all on the same colour of square. */
     private static boolean insufficient(Pos p) {
-        int minors = 0;
-        for (int v : p.b) {
-            int t = type(v);
+        int knights = 0, bishops = 0, light = 0;
+        for (int sq = 0; sq < 64; sq++) {
+            int t = type(p.b[sq]);
             if (t == P || t == R || t == Q) return false;
-            if (t == N || t == B) minors++;
+            if (t == N) knights++;
+            if (t == B) { bishops++; if ((sq / 8 + sq % 8) % 2 == 0) light++; }
         }
-        return minors <= 1;
+        if (knights + bishops <= 1) return true;
+        return knights == 0 && (light == 0 || light == bishops);
     }
 
     // ------------------------------------------------------------------ game flow
 
     private void commit(Move m) {
         pos = make(pos, m);
+        if (pos.half == 0) seen.clear();   // a capture or pawn move: nothing before it can come round again
+        seen.add(pos.key());
         lastFrom = m.from;
         lastTo = m.to;
-        sel = -1;
+        select(-1);
+        promoting = null;
         endTurn();
         if (!over) host.onInfo(inCheck(pos, pos.side) ? "Check!" : "");
     }
@@ -228,32 +267,68 @@ public class Chess extends Game {
             return 0;
         }
         if (insufficient(pos)) { host.onInfo("Not enough pieces left to checkmate"); return 0; }
+        if (pos.half >= 100) { host.onInfo("50 moves each with no capture or pawn move"); return 0; }
+        long k = pos.key();
+        int times = 0;
+        for (long s : seen) if (s == k) times++;
+        if (times >= 3) { host.onInfo("Same position three times"); return 0; }
         return -1;
     }
 
     @Override
     protected boolean moveCursor(int dx, int dy) {
+        if (promoting != null) {   // the picker is drawn upright: arrows go as you see them
+            int was = promoPick;
+            promoPick = Math.max(0, Math.min(PROMOS.length - 1, promoPick + dx));
+            return promoPick != was;
+        }
         cr = Math.max(0, Math.min(7, cr + screenDy(dy)));
         cc = Math.max(0, Math.min(7, cc + screenDx(dx)));
         return true;
     }
 
-    private List<Move> fromSel() {
-        List<Move> out = new ArrayList<>();
-        if (sel < 0) return out;
-        for (Move m : legal(pos)) if (m.from == sel) out.add(m);
-        return out;
+    /** Pick up a piece (or put it down with -1) and work out where it can go. */
+    private void select(int sq) {
+        sel = sq;
+        selMoves = new ArrayList<>();
+        if (sq < 0) return;
+        for (Move m : legal(pos)) if (m.from == sq) selMoves.add(m);
     }
 
     @Override
     protected boolean playAtCursor() {
+        if (promoting != null) {
+            for (Move m : promoting) if (m.promo == PROMOS[promoPick]) { commit(m); return true; }
+            return false;
+        }
         int sq = cr * 8 + cc;
-        for (Move m : fromSel()) if (m.to == sq) { commit(m); return true; }
-        if (sq == sel) { sel = -1; return true; }
+        List<Move> here = new ArrayList<>();
+        for (Move m : selMoves) if (m.to == sq) here.add(m);
+        if (here.size() == 1) { commit(here.get(0)); return true; }
+        if (here.size() > 1) {   // a pawn on the last row: ask what it becomes
+            promoting = here;
+            promoPick = 0;
+            host.onInfo("Promote to  ·  Left / Right picks  ·  OK confirms  ·  Back cancels");
+            return true;
+        }
+        if (sq == sel) { select(-1); return true; }
         if (owner(pos.b[sq]) == turn) {
-            for (Move m : legal(pos)) if (m.from == sq) { sel = sq; return true; }
+            select(sq);
+            if (!selMoves.isEmpty()) return true;
+            select(-1);
         }
         return false;
+    }
+
+    @Override
+    public boolean onKeyDown(int code, KeyEvent e) {
+        if (code == KeyEvent.KEYCODE_BACK && promoting != null && !over) {
+            promoting = null;
+            host.onInfo(inCheck(pos, pos.side) ? "Check!" : "");
+            invalidate();
+            return true;
+        }
+        return super.onKeyDown(code, e);
     }
 
     // ------------------------------------------------------------------ computer
@@ -263,11 +338,12 @@ public class Chess extends Game {
         final Pos snap = pos.copy();
         final int depth = level == 0 ? 1 : level == 1 ? 2 : 3;
         final boolean loose = level == 0 && Math.random() < 0.3;
+        final int g = gen;
         new Thread(() -> {
             List<Move> ms = ordered(snap, legal(snap));
             if (loose) {
                 final Move any = ms.get((int) (Math.random() * ms.size()));
-                post(() -> { if (cpuTurn()) commit(any); });
+                cpuDone(g, () -> commit(any));
                 return;
             }
             Move best = null;
@@ -278,28 +354,59 @@ public class Chess extends Game {
                 if (s > alpha) alpha = s;
             }
             final Move pick = best;
-            post(() -> { if (cpuTurn() && pick != null) commit(pick); });
+            if (pick != null) cpuDone(g, () -> commit(pick));
         }, "chess-ai").start();
     }
 
+    /** Alpha-beta over pseudo-legal moves; a move that leaves the king in check is skipped when it comes up. */
     private static int search(Pos p, int depth, int alpha, int beta) {
-        List<Move> ms = legal(p);
-        if (ms.isEmpty()) return inCheck(p, p.side) ? -100_000 - depth : 0;
-        if (depth == 0) return eval(p);
-        for (Move m : ordered(p, ms)) {
-            int s = -search(make(p, m), depth - 1, -beta, -alpha);
+        if (depth == 0) {
+            if (inCheck(p, p.side) && !hasLegal(p)) return -100_000;
+            return quiesce(p, alpha, beta, 4);
+        }
+        boolean any = false;
+        for (Move m : ordered(p, pseudo(p))) {
+            Pos n = make(p, m);
+            if (inCheck(n, p.side)) continue;
+            any = true;
+            int s = -search(n, depth - 1, -beta, -alpha);
+            if (s > alpha) alpha = s;
+            if (alpha >= beta) break;
+        }
+        if (!any) return inCheck(p, p.side) ? -100_000 - depth : 0;
+        return alpha;
+    }
+
+    /** At the leaves, play out captures (a few deep) so a hanging piece isn't missed. */
+    private static int quiesce(Pos p, int alpha, int beta, int left) {
+        int stand = eval(p);
+        if (stand >= beta || left == 0) return stand;
+        if (stand > alpha) alpha = stand;
+        for (Move m : ordered(p, pseudo(p))) {
+            boolean noisy = p.b[m.to] != 0 || m.promo == Q || (m.to == p.ep && type(p.b[m.from]) == P);
+            if (!noisy || (m.promo != 0 && m.promo != Q)) continue;   // quiet moves and underpromotions wait
+            Pos n = make(p, m);
+            if (inCheck(n, p.side)) continue;
+            int s = -quiesce(n, -beta, -alpha, left - 1);
             if (s > alpha) alpha = s;
             if (alpha >= beta) break;
         }
         return alpha;
     }
 
-    /** Captures first, most valuable victim first: prunes much more. */
+    private static boolean hasLegal(Pos p) {
+        for (Move m : pseudo(p)) if (!inCheck(make(p, m), p.side)) return true;
+        return false;
+    }
+
+    /** Captures and queening first, most valuable victim first: prunes much more. */
     private static List<Move> ordered(Pos p, List<Move> ms) {
         List<Move> out = new ArrayList<>(ms);
-        Collections.sort(out, (a, b) -> VALUE[type(p.b[b.to])] - VALUE[type(p.b[a.to])]);
+        Collections.sort(out, (a, b) -> gain(p, b) - gain(p, a));
         return out;
     }
+
+    private static int gain(Pos p, Move m) { return VALUE[type(p.b[m.to])] + VALUE[m.promo]; }
 
     private static int eval(Pos p) {
         int s = 0;
@@ -326,13 +433,28 @@ public class Chess extends Game {
         beginBoard(c);
         drawBoard(c);
         c.restore();
+        if (promoting != null && !over) drawPromotion(c);
+    }
+
+    /** Four pieces to choose from, upright over the middle of the board. */
+    private void drawPromotion(Canvas c) {
+        float cell = Math.min(getWidth(), getHeight()) * 0.92f / 8 * 1.15f, gap = cell * 0.2f;
+        float w = PROMOS.length * cell + (PROMOS.length + 1) * gap, h = cell + 2 * gap;
+        float l = (getWidth() - w) / 2, t = (getHeight() - h) / 2;
+        panel(c, l, t, l + w, t + h, gap);
+        for (int i = 0; i < PROMOS.length; i++) {
+            float x = l + gap + i * (cell + gap), y = t + gap;
+            boolean inverse = i == promoPick && art.cursorUnder(c, x, y, cell);
+            art.chessman(c, x + cell / 2, y + cell / 2, cell, PROMOS[i], turn, inverse);
+            if (i == promoPick) art.cursor(c, x, y, cell);
+        }
     }
 
     private void drawBoard(Canvas c) {
         float side = Math.min(getWidth(), getHeight()) * 0.92f, cell = side / 8;
         float left = (getWidth() - side) / 2, top = (getHeight() - side) / 2;
         art.board(c, left, top, side, 8);
-        boolean mine = !over && !cpuTurn();
+        boolean mine = !over && !cpuTurn() && promoting == null;   // the promotion picker has its own cursor
         int checkedKing = -1;
         if (inCheck(pos, pos.side)) for (int sq = 0; sq < 64; sq++) if (pos.b[sq] == pos.side * 8 + K) checkedKing = sq;
 
@@ -355,12 +477,11 @@ public class Chess extends Game {
             c.restore();
         }
 
-        if (sel >= 0) for (Move m : fromSel()) {
+        if (sel >= 0) for (Move m : selMoves) {
             float cx = left + (m.to % 8 + 0.5f) * cell, cy = top + (m.to / 8 + 0.5f) * cell;
             art.hint(c, cx, cy, cell, pos.b[m.to] != 0);
         }
 
-        if (mine) art.cursor(c, left + cc * cell, top + cr * cell, cell);
-        else postInvalidateOnAnimation();
+        if (mine) art.cursor(c, left + cc * cell, top + cr * cell, cell);   // nothing else moves: no redraw loop
     }
 }

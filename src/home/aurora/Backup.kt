@@ -31,6 +31,7 @@ object Backup {
         "art_list2", "art_list2_time", "art_order", "art_pos",   // painting list cache
         "w_cache", "w_time", "weather_code",                    // weather cache
         "bed_done", "pin_misses", "pin_wait_until",             // today's state, lockouts
+        "pin_wait_rt", "pin_wait_ms",
         "remote_tokens", "remote_phones",                       // pairing: phones pair again
         "lock_pin", "cal_url",                                  // secrets stay on the TV
         "last_app", "last_app_at",                              // what was on last
@@ -42,7 +43,7 @@ object Backup {
     /** What each setting is read as: b(oolean), i(nt), l(ong), f(loat), s(tring), set. */
     private val TYPES: Map<String, String> = buildMap {
         listOf("bed_on", "dream_art", "hab_pervol", "hab_resume", "hab_safe", "holidays", "lock_on", "morning_on", "night_on",
-            "remote_on", "settings_pin", "show_date", "show_weather", "ui_sounds", "w_fahrenheit", "w_unit_set", "wind_down", "gentle_volume")
+            "remote_on", "remote_full", "settings_pin", "show_date", "show_weather", "ui_sounds", "w_fahrenheit", "w_unit_set", "wind_down", "gentle_volume")
             .forEach { put(it, "b") }
         listOf("bed_at", "hab_safe_pct", "morning_at", "morning_days", "night_end", "night_level", "night_start", "wp_every", "ui_sounds_level")
             .forEach { put(it, "i") }
@@ -69,6 +70,10 @@ object Backup {
     /** The type a setting must have, or null for settings this version doesn't know. */
     @JvmStatic
     fun typeOf(key: String): String? = TYPES[key] ?: if (counter(key)) "i" else null   // launch counts, volumes, game scores
+
+    /** Is [key] either left out on purpose or restored with a known type? (A test checks every key the app uses.) */
+    @JvmStatic
+    fun handles(key: String): Boolean = !kept(key) || typeOf(key) != null
 
     /** Everything worth keeping, as a file. */
     @JvmStatic
@@ -167,22 +172,28 @@ object Backup {
             } catch (ignored: Exception) {   // one bad value never stops the rest
             }
         }
-        e.remove("pin_misses").remove("pin_wait_until").remove("bed_done")
+        e.remove("pin_misses").remove("pin_wait_until").remove("pin_wait_rt").remove("pin_wait_ms").remove("bed_done")
         if (!e.commit()) throw Exception("Couldn't save the settings")
     }
 
     // ------------------------------------------------------------------ a restore waiting for the TV
 
+    // Waits for the PIN, but not forever: an offer nobody answers lapses after 10 minutes.
+    private const val OFFER_MS = 10 * 60_000L
     private var pending: JSONObject? = null
+    private var offeredAt = 0L
 
     @JvmStatic @Synchronized
-    fun offer(backup: JSONObject) { pending = backup }
+    fun offer(backup: JSONObject) { pending = backup; offeredAt = android.os.SystemClock.elapsedRealtime() }
 
     @JvmStatic @Synchronized
-    fun take(): JSONObject? = pending.also { pending = null }
+    fun take(): JSONObject? = (if (waiting()) pending else null).also { pending = null }
 
     @JvmStatic @Synchronized
-    fun waiting(): Boolean = pending != null
+    fun waiting(): Boolean {
+        if (pending != null && android.os.SystemClock.elapsedRealtime() - offeredAt > OFFER_MS) pending = null
+        return pending != null
+    }
 
     // ------------------------------------------------------------------ reading typed values from a backup
 

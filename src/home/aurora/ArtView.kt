@@ -3,7 +3,6 @@ package home.aurora
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -53,6 +52,7 @@ open class ArtView(c: Context) : View(c) {
     private var prev: Work? = null
     private var listener: Listener? = null
     private var running = false
+    private var frameMs = 66L   // the slow zoom between crossfades
     private var captionTop = -1f
     private var gallery = false
     private var wall: Bitmap? = null   // dp from the top, right-aligned; -1 = bottom-left
@@ -74,6 +74,9 @@ open class ArtView(c: Context) : View(c) {
     }
 
     fun setListener(l: Listener?) { listener = l }
+
+    /** Time between frames of the slow zoom (the crossfade stays smooth); the screensaver asks for less. */
+    fun setFrameMs(ms: Long) { frameMs = Math.max(16L, ms) }
 
     /** Lets a room hang the work itself (frame, light, label); `alpha` is the crossfade. */
     fun interface Hanger { fun hang(c: Canvas, bmp: Bitmap, title: String, byline: String, credit: String, alpha: Int) }
@@ -101,19 +104,23 @@ open class ArtView(c: Context) : View(c) {
      */
     private fun loadExhibit() {
         Thread({
-            val f = java.io.File(context.cacheDir, "exhibit_harbor_v1.png")
-            var b: Bitmap? = if (f.exists()) BitmapFactory.decodeFile(f.path) else null
-            if (b == null) {
-                b = Exhibit.paint(1280, 860)
-                try {
-                    java.io.FileOutputStream(f).use { out ->
-                        b.compress(Bitmap.CompressFormat.PNG, 100, out)
-                    }
-                } catch (ignored: Exception) { }
-            }
             val w = Work()
-            w.bmp = b
-            w.soft = Bitmap.createScaledBitmap(b, 32, Math.max(1, 32 * b.height / b.width), true)
+            try {
+                val f = java.io.File(context.cacheDir, "exhibit_harbor_v1.png")
+                var b: Bitmap? = if (f.exists()) Bitmaps.file(f.path, 0, 0) else null
+                if (b == null) {
+                    b = Exhibit.paint(1280, 860)
+                    try {
+                        java.io.FileOutputStream(f).use { out ->
+                            b.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                    } catch (ignored: Exception) { }
+                }
+                w.bmp = b
+                w.soft = Bitmap.createScaledBitmap(b, 32, Math.max(1, 32 * b.height / b.width), true)
+            } catch (e: Throwable) {
+                return@Thread   // out of memory: the wall's own fallback stays up
+            }
             w.title = "Harbor at First Light"
             w.byline = "Aurora Collection  ·  oil on canvas"
             w.credit = "On view while the collection is offline"
@@ -173,8 +180,13 @@ open class ArtView(c: Context) : View(c) {
                 // Ask for enough pixels to fill a 1080p screen in whichever direction it'll be scaled.
                 val th = w.optJSONObject("thumbnail")
                 val aspect = if (th == null) 1.4f else th.optDouble("width", 1.4).toFloat() / th.optDouble("height", 1.0).toFloat()
-                val size = if (aspect >= 16f / 9f * 0.7f) "1920," else ",1080"
-                out.bmp = download("https://www.artic.edu/iiif/2/" + w.getString("image_id") + "/full/" + size + "/0/default.jpg")
+                val wide = aspect >= 16f / 9f * 0.7f
+                val size = if (wide) "1920," else ",1080"
+                // and decode only what this screen needs in that direction (a 720p TV gets 720p)
+                val dm = resources.displayMetrics
+                val needW = if (wide) Math.max(dm.widthPixels, dm.heightPixels) else 0
+                val needH = if (wide) 0 else Math.min(dm.widthPixels, dm.heightPixels)
+                out.bmp = download("https://www.artic.edu/iiif/2/" + w.getString("image_id") + "/full/" + size + "/0/default.jpg", needW, needH)
                 out.soft = Bitmap.createScaledBitmap(out.bmp, 32, Math.max(1, 32 * out.bmp.height / out.bmp.width), true)
                 main.post {
                     prev = cur
@@ -183,7 +195,7 @@ open class ArtView(c: Context) : View(c) {
                     invalidate()
                     if (running && gen == generation) main.postDelayed(next, CHANGE_MS)
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {   // out of memory too: skip this one, never the launcher
                 main.post(Runnable {
                     if (gen != generation) return@Runnable
                     if (gallery) { if (running) main.postDelayed(next, CHANGE_MS) }   // keep the exhibit up, try again later
@@ -243,7 +255,7 @@ open class ArtView(c: Context) : View(c) {
         if (prev != null && fading) drawWork(c, prev, 255, now)
         if (cur != null) drawWork(c, cur, if (fading) (255 * (now - cur.shownAt) / FADE_MS).toInt() else 255, now)
         if (!fading) this.prev = null
-        if (running) postInvalidateDelayed(if (fading) 16L else 66L)   // keep the slow zoom moving
+        if (running) postInvalidateDelayed(if (fading) 16L else frameMs)   // keep the slow zoom moving
     }
 
     private fun drawGallery(c: Canvas) {
@@ -543,15 +555,14 @@ open class ArtView(c: Context) : View(c) {
                 + "&fields=title,artist_title,date_display,image_id,thumbnail&limit=100")
 
         @Throws(Exception::class)
-        private fun download(url: String): Bitmap {
+        private fun download(url: String, needW: Int, needH: Int): Bitmap {
             val h = URL(url).openConnection() as HttpURLConnection
             h.connectTimeout = 10_000
             h.readTimeout = 20_000
             h.setRequestProperty("User-Agent", "AuroraHome/3 (personal TV screensaver)")
             try {
                 h.inputStream.use { inp ->
-                    val b = BitmapFactory.decodeStream(inp) ?: throw Exception("not an image")
-                    return b
+                    return Bitmaps.bytes(inp.readBytes(), needW, needH) ?: throw Exception("not an image")
                 }
             } finally {
                 h.disconnect()

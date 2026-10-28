@@ -2,7 +2,6 @@ package home.aurora
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -41,10 +40,9 @@ class LightRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     private var blur: Bitmap? = null
 
     override fun build() {
-        val o = BitmapFactory.Options()
-        o.inScaled = false
-        photo = BitmapFactory.decodeResource(home.resources, R.drawable.light_room, o)
-        blur = BitmapFactory.decodeResource(home.resources, R.drawable.light_room_blur, o)
+        // the photographs come off the main thread (cached after the first time); the room fills in when they land
+        photo = plate(R.drawable.light_room, true) { b -> photo = b; repaintAll() }
+        blur = plate(R.drawable.light_room_blur, false) { b -> blur = b; repaintAll() }
 
         art { c -> studio(c) }
 
@@ -153,7 +151,8 @@ class LightRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
 
     private fun studio(c: Canvas) {
         val p = Room.paint()
-        photo?.let { c.drawBitmap(it, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), p) }
+        val photo = photo ?: return   // nothing until the photograph is in
+        c.drawBitmap(photo, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), p)
         // a breath of extra daylight from the window, and a gentle floor of shade for the apps
         p.alpha = 255; p.shader = LinearGradient(0f, 300f, 0f, H.toFloat(), 0x00F4EFE8, 0x40D8CFC4, Shader.TileMode.CLAMP)
         c.drawRect(0f, 300f, W.toFloat(), H.toFloat(), p)

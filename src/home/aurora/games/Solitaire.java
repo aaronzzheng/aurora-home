@@ -240,6 +240,15 @@ public class Solitaire extends Game {
         super.onDetachedFromWindow();
     }
 
+    @Override protected void onPaused() { removeCallbacks(tick); }
+
+    @Override
+    protected void onResumed(long pausedMs) {
+        startedAt += pausedMs;   // time in a menu doesn't count
+        removeCallbacks(tick);
+        if (!over) post(tick);
+    }
+
     private int firstUp(int c) { return Math.min(down[c], Math.max(0, tab[c].size() - 1)); }
 
     @Override

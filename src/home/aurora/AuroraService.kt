@@ -59,6 +59,7 @@ class AuroraService : AccessibilityService() {
         @JvmField @Volatile var instance: AuroraService? = null
         const val PORT = 8765
         private const val WIND_MS = 5 * 60_000L   // wind-down: the last minutes of a sleep timer
+        private const val UNLOCK_MS = 2 * 3_600_000L   // an unlocked app asks for the PIN again after this
 
         /** "4:05" or "1:02:03" for a number of seconds. */
         @JvmStatic
@@ -78,7 +79,7 @@ class AuroraService : AccessibilityService() {
 
     private val audio get() = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-    private val unlocked = HashSet<String>()   // until the TV goes to sleep
+    private val unlocked = HashMap<String, Long>()   // pkg → when (elapsedRealtime); until sleep or UNLOCK_MS
     private var night: View? = null
     private var banner: View? = null
     private var timerView: TextView? = null
@@ -214,6 +215,7 @@ class AuroraService : AccessibilityService() {
         removeOverlay(banner)
         dismissTimer()
         tone?.release()
+        adbLocal?.shutdown()
         flagThread?.quitSafely()
         super.onDestroy()
     }
@@ -405,8 +407,15 @@ class AuroraService : AccessibilityService() {
 
     fun kidLockOn(): Boolean = prefs.getBoolean("lock_on", false) && Pin.isSet(prefs)
     fun lockedApps(): MutableSet<String> = HashSet(prefs.getStringSet("locked", emptySet()) ?: emptySet())
-    fun isLocked(pkg: String?): Boolean = pkg != null && kidLockOn() && pkg in lockedApps() && pkg !in unlocked
-    fun unlock(pkg: String) { unlocked += pkg }
+    fun isLocked(pkg: String?): Boolean = pkg != null && kidLockOn() && pkg in lockedApps() && !stillUnlocked(pkg)
+    fun unlock(pkg: String) { unlocked[pkg] = SystemClock.elapsedRealtime() }
+
+    private fun stillUnlocked(pkg: String): Boolean {
+        val at = unlocked[pkg] ?: return false
+        if (SystemClock.elapsedRealtime() - at < UNLOCK_MS) return true
+        unlocked.remove(pkg)
+        return false
+    }
     fun relock() = unlocked.clear()
 
     /** A locked app came to the front some other way (phone remote, "open last app"…): send it home for the PIN. */

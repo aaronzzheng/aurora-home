@@ -42,8 +42,11 @@ public class Twenty48 extends Game {
         spawn();
         spawn();
         report();
-        if (host != null) host.onInfo("Join the numbers to reach 2048");
+        if (host != null) host.onInfo("Join the numbers to reach " + goal());
     }
+
+    /** The tile to aim for: 2048 can't be reached on the 3x3 grid, so it aims for 256. */
+    private int goal() { return S == 3 ? 256 : 2048; }
 
     private String bestKey() { return S == 4 ? "best_2048" : "best_2048_" + S; }
 
@@ -85,7 +88,7 @@ public class Twenty48 extends Game {
                     out[o - 1] *= 2;
                     merged[o - 1] = true;
                     score += out[o - 1];
-                    if (out[o - 1] == 2048 && !reached) { reached = true; host.onInfo("2048! Keep going for a high score"); }
+                    if (out[o - 1] == goal() && !reached) { reached = true; host.onInfo(goal() + "! Keep going for a high score"); }
                 } else {
                     out[o++] = vals[k];
                 }

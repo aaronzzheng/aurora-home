@@ -250,7 +250,6 @@ public class DotsAndBoxes extends Game {
         for (int r = 0; r <= R; r++) for (int q = 0; q <= C; q++) drawDot(c, k, id, left + q * cell, top + r * cell, cell);
         k.screenGlare(c, left - pad, top - pad, left + bw + pad, top + bh + pad);
         k.reset();
-        if (!mine) postInvalidateOnAnimation();
     }
 
     private float[] ends(int id, float left, float top, float cell) {
@@ -522,7 +521,6 @@ public class DotsAndBoxes extends Game {
         k.glow(false, 0);
         k.reset();
         k.scanlines(c, left - cell * 0.3f - k.u * 14, top - cell * 0.3f - k.u * 30, left + cell * C + cell * 0.3f + k.u * 14, top + cell * R + cell * 0.3f + k.u * 14);
-        if (!mine) postInvalidateOnAnimation();
     }
 
     private boolean isSideOfCursor(int id) {

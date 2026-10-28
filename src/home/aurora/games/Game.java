@@ -44,6 +44,12 @@ public abstract class Game extends View {
     protected boolean over;
     private int firstPlayer = 1;
     private boolean cpuPending;
+    /** Bumped by a new round, a pause or leaving the screen: a computer move worked out before that is dropped. */
+    protected int gen;
+    private int pauses;
+    private long pausedAt;
+    /** The board is fading round to the other player; arrows would go the wrong way. */
+    private boolean flipping;
 
     protected final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     protected final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -143,9 +149,12 @@ public abstract class Game extends View {
         over = false;
         cpuPending = false;
         removeCallbacks(cpuRunnable);
+        gen++;
+        if (pauses > 0) pausedAt = SystemClock.uptimeMillis();   // the new round's clock starts now
         turn = alternateStart() ? firstPlayer : 1;
         firstPlayer = 3 - firstPlayer;
         animate().cancel();
+        flipping = false;
         setAlpha(1f);
         facing = turnsBoard() && !vsCpu ? turn : 1;
         newGame();
@@ -175,9 +184,11 @@ public abstract class Game extends View {
             host.onTurn(turn);
             maybeCpu();
             if (turnsBoard() && !vsCpu && facing != turn) {
-                // fade out, turn the board to the new player, fade back in
+                // fade out, turn the board to the new player, fade back in; no input until it has turned
+                flipping = true;
                 animate().alpha(0f).setDuration(170).withEndAction(() -> {
                     facing = turn;
+                    flipping = false;
                     invalidate();
                     animate().alpha(1f).setDuration(230).start();
                 }).start();
@@ -214,14 +225,56 @@ public abstract class Game extends View {
 
     private final Runnable cpuRunnable = () -> {
         cpuPending = false;
-        if (cpuTurn()) cpuMove();
+        if (cpuTurn() && pauses == 0) cpuMove();
     };
 
     protected void maybeCpu() {
-        if (cpuTurn() && !cpuPending) {
+        if (cpuTurn() && !cpuPending && pauses == 0) {
             cpuPending = true;
             postDelayed(cpuRunnable, 650);
         }
+    }
+
+    /**
+     * For a computer move worked out on another thread: plays it back on the UI thread,
+     * unless a new round, a pause or leaving the screen came in between ({@code g} is {@link #gen} when it started).
+     */
+    protected void cpuDone(int g, Runnable play) {
+        post(() -> { if (g == gen && cpuTurn()) play.run(); });
+    }
+
+    /** A menu or another app is over the game: stop the clock and hold the computer's move. Calls nest. */
+    public void pause() {
+        if (pauses++ > 0) return;
+        pausedAt = SystemClock.uptimeMillis();
+        removeCallbacks(cpuRunnable);
+        cpuPending = false;
+        gen++;
+        onPaused();
+    }
+
+    /** Undoes one {@link #pause()}; the last one restarts the clock and lets the computer move. */
+    public void resume() {
+        if (pauses == 0 || --pauses > 0) return;
+        onResumed(SystemClock.uptimeMillis() - pausedAt);
+        maybeCpu();
+        invalidate();
+    }
+
+    /** Timed games stop their tick here. */
+    protected void onPaused() { }
+
+    /** Timed games move their start time on by {@code pausedMs} so the pause doesn't count. */
+    protected void onResumed(long pausedMs) { }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        gen++;
+        removeCallbacks(cpuRunnable);
+        removeCallbacks(pulseTick);
+        cpuPending = false;
+        pulsing = false;
+        super.onDetachedFromWindow();
     }
 
     /** Subclasses mid-animation return true to ignore input. */
@@ -235,7 +288,7 @@ public abstract class Game extends View {
             if (ok) { home.aurora.Sounds.select(getContext()); restart(); return true; }
             return super.onKeyDown(code, e);
         }
-        if (cpuTurn() || busy()) return ok || isDpad(code) || super.onKeyDown(code, e);
+        if (cpuTurn() || busy() || flipping) return ok || isDpad(code) || super.onKeyDown(code, e);
         switch (code) {
             case KeyEvent.KEYCODE_DPAD_LEFT: return moved(moveCursor(-1, 0));
             case KeyEvent.KEYCODE_DPAD_RIGHT: return moved(moveCursor(1, 0));
@@ -273,9 +326,12 @@ public abstract class Game extends View {
 
     protected static int alpha(int c, int a) { return (c & 0x00FFFFFF) | (a << 24); }
 
-    /** 0..1..0 every ~1.2 s, for the cursor. Keeps the view animating while visible. */
+    private boolean pulsing;
+    private final Runnable pulseTick = () -> { pulsing = false; invalidate(); };
+
+    /** 0..1..0 every ~1.2 s, for the cursor. Redraws about 18 times a second while a cursor shows, not every frame. */
     protected float pulse() {
-        postInvalidateOnAnimation();
+        if (!pulsing) { pulsing = true; postDelayed(pulseTick, 55); }
         double t = (SystemClock.uptimeMillis() % 1200) / 1200.0;
         return (float) (0.5 - 0.5 * Math.cos(t * 2 * Math.PI));
     }

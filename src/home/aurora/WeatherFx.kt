@@ -51,7 +51,7 @@ open class WeatherFx(c: Context) : View(c) {
     // beads on the glass
     private var bx = FloatArray(0); private var by = FloatArray(0); private var bs = FloatArray(0)
     private var bvy = FloatArray(0); private var bage = FloatArray(0)
-    private val trail = arrayOfNulls<FloatArray>(60)   // recent positions of sliding beads: x, y, size, age
+    private val trail = Array(60) { floatArrayOf(0f, 0f, 0f, TRAIL_LIFE) }   // recent positions of sliding beads: x, y, size, age
     private var trailHead = 0
     // fog banks
     private var fx = FloatArray(0); private var fy = FloatArray(0); private var fw = FloatArray(0); private var fv = FloatArray(0)
@@ -124,12 +124,30 @@ open class WeatherFx(c: Context) : View(c) {
             fy[i] = H() * (0.15f + rnd.nextFloat() * 0.75f)
             fv[i] = (6 + rnd.nextFloat() * 10) * d * (if (rnd.nextBoolean()) 1 else -1)
         }
-        java.util.Arrays.fill(trail, null)
+        for (t in trail) t[3] = TRAIL_LIFE
+        shaders()
         if (mode == SNOW && flakeSoft == null) flakeSoft = softDot(64)
         if ((mode == RAIN || mode == STORM || mode == DRIZZLE) && bead == null) bead = makeBead(96)
         if (mode == FOG && fogBank == null) fogBank = makeFog(256, 128)
         nextStrike = SystemClock.uptimeMillis() + 4000 + rnd.nextInt(5000)
         strikeAt = -1
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { shaders() }
+
+    /** The full-screen gradients depend only on the mode and height: made here, not every frame. */
+    private fun shaders() {
+        val h = height.toFloat()
+        if (h <= 0) return
+        veil.shader = when (mode) {
+            SNOW -> LinearGradient(0f, 0f, 0f, h, 0x1AC8D6E6, 0x00C8D6E6, Shader.TileMode.CLAMP)
+            STORM -> LinearGradient(0f, 0f, 0f, h, 0x6614202E, 0x26101820, Shader.TileMode.CLAMP)
+            RAIN -> LinearGradient(0f, 0f, 0f, h, 0x4A1A2633, 0x14101820, Shader.TileMode.CLAMP)
+            DRIZZLE -> LinearGradient(0f, 0f, 0f, h, 0x2A202A36, 0x14101820, Shader.TileMode.CLAMP)
+            else -> null
+        }
+        // the lightning flash at full strength; each frame only turns its alpha down
+        flash.shader = LinearGradient(0f, 0f, 0f, h, (110 shl 24) or 0xDDE6FF, (35 shl 24) or 0xDDE6FF, Shader.TileMode.CLAMP)
     }
 
     private fun seed(i: Int, anywhere: Boolean) {
@@ -177,7 +195,6 @@ open class WeatherFx(c: Context) : View(c) {
             if (mode == STORM) drawLightning(c, now, w, h)
             drawBeads(c, h, dt)
         } else if (mode == SNOW) {
-            veil.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0x1AC8D6E6, 0x00C8D6E6, Shader.TileMode.CLAMP)
             c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), veil)
             drawSnow(c, h, dt, wind)
         } else if (mode == FOG) {
@@ -186,13 +203,10 @@ open class WeatherFx(c: Context) : View(c) {
 
         val shimmering = drawShimmer(c, now, w, h)
         if (shimmering) postInvalidateOnAnimation()
-        else if (running && mode != NONE) postInvalidateDelayed(FRAME_MS)
+        else if (running && mode != NONE) postInvalidateDelayed(if (WallpaperView.idle()) IDLE_FRAME_MS else FRAME_MS)   // nobody at the remote: fewer frames
     }
 
     private fun drawGloom(c: Canvas, w: Int, h: Int) {
-        val top = if (mode == STORM) 0x6614202E else if (mode == RAIN) 0x4A1A2633 else 0x2A202A36
-        val bottom = if (mode == STORM) 0x26101820 else 0x14101820
-        veil.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), top, bottom, Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), veil)
     }
 
@@ -223,9 +237,9 @@ open class WeatherFx(c: Context) : View(c) {
         val bead = bead!!
         // trails left by sliding beads fade out
         for (t in trail) {
-            if (t == null) continue
+            if (t[3] >= TRAIL_LIFE) continue
             t[3] += dt
-            val life = 1f - t[3] / 4f
+            val life = 1f - t[3] / TRAIL_LIFE
             if (life <= 0) continue
             bmp.alpha = (110 * life).toInt()
             val s = t[2] * 0.42f
@@ -252,7 +266,8 @@ open class WeatherFx(c: Context) : View(c) {
     }
 
     private fun addTrail(x: Float, y: Float, s: Float) {
-        trail[trailHead] = floatArrayOf(x, y, s, 0f)
+        val t = trail[trailHead]   // reused: no garbage per bead per frame
+        t[0] = x; t[1] = y; t[2] = s; t[3] = 0f
         trailHead = (trailHead + 1) % trail.size
     }
 
@@ -295,8 +310,7 @@ open class WeatherFx(c: Context) : View(c) {
         // flicker: bright, dim, bright again, then fade
         val k = if (t < 70) 1f else if (t < 140) 0.25f else if (t < 230) 0.85f else if (t < 700) 0.85f * (1 - (t - 230) / 470f) else 0f
         if (t > 700) { strikeAt = -1; return }
-        flash.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), ((110 * k).toInt() shl 24) or 0xDDE6FF,
-                ((35 * k).toInt() shl 24) or 0xDDE6FF, Shader.TileMode.CLAMP)
+        flash.alpha = (255 * k).toInt()
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), flash)
         if (t < 230) {
             // three passes: wide blue haze, glow, white-hot core; branches thinner and fainter
@@ -385,6 +399,8 @@ open class WeatherFx(c: Context) : View(c) {
         private const val STORM = 4
         private const val FOG = 5
         private const val FRAME_MS = 33L
+        private const val IDLE_FRAME_MS = 66L
+        private const val TRAIL_LIFE = 4f   // seconds
         private const val SHIMMER_MS = 1500L
 
         // ------------------------------------------------------------------ sprites

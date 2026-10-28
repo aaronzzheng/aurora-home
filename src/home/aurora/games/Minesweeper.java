@@ -231,6 +231,15 @@ public class Minesweeper extends Game {
         super.onDetachedFromWindow();
     }
 
+    @Override protected void onPaused() { removeCallbacks(tick); }
+
+    @Override
+    protected void onResumed(long pausedMs) {
+        startedAt += pausedMs;   // time in a menu doesn't count
+        removeCallbacks(tick);
+        if (placed && !over) post(tick);
+    }
+
     @Override
     protected boolean moveCursor(int dx, int dy) {
         cr = Math.max(0, Math.min(H - 1, cr + dy));

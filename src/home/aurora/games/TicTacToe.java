@@ -160,7 +160,6 @@ public class TicTacToe extends Game {
             default: drawSmooth(c, k, id, left, top, side, cell, showCursor, pulse); break;
         }
         k.screenGlare(c, left, top, left + side, top + side);
-        if (over || cpuTurn()) postInvalidateOnAnimation();
     }
 
     // --- Windows 95: nine buttons that sink when played

@@ -24,6 +24,8 @@ public class ConnectFour extends Game {
     private int col = 3;
     private int dropCol = -1, dropRow, dropPlayer;
     private long dropStart;
+    /** The disc has landed but its turn hasn't ended yet: still no input. */
+    private boolean settling;
     private int[][] winCells;
 
     public ConnectFour(Context c) {
@@ -39,10 +41,11 @@ public class ConnectFour extends Game {
         for (int[] r : g) java.util.Arrays.fill(r, 0);
         col = 3;
         dropCol = -1;
+        settling = false;
         winCells = null;
     }
 
-    @Override protected boolean busy() { return dropCol >= 0; }
+    @Override protected boolean busy() { return dropCol >= 0 || settling; }
 
     @Override
     protected boolean moveCursor(int dx, int dy) {
@@ -64,7 +67,9 @@ public class ConnectFour extends Game {
         return true;
     }
 
-    private int landing(int c) {
+    private int landing(int c) { return landing(g, c); }
+
+    private static int landing(int[][] g, int c) {
         for (int r = H - 1; r >= 0; r--) if (g[r][c] == 0) return r;
         return -1;
     }
@@ -78,31 +83,35 @@ public class ConnectFour extends Game {
             drop(c, 2);
             return;
         }
-        int depth = level == 0 ? 1 : level == 1 ? 3 : 5;
-        int best = Integer.MIN_VALUE, pick = 3;
-        for (int c : new int[]{3, 2, 4, 1, 5, 0, 6}) {
-            int r = landing(c);
-            if (r < 0) continue;
-            g[r][c] = 2;
-            int s = -negamax(1, depth - 1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE);
-            g[r][c] = 0;
-            if (s > best) { best = s; pick = c; }
-        }
-        col = pick;
-        drop(pick, 2);
+        final int depth = level == 0 ? 1 : level == 1 ? 3 : 5, gn = gen;
+        final int[][] snap = new int[H][];
+        for (int r = 0; r < H; r++) snap[r] = g[r].clone();
+        new Thread(() -> {   // the deep search takes a moment: keep the screen responsive
+            int best = Integer.MIN_VALUE, pick = 3;
+            for (int c : new int[]{3, 2, 4, 1, 5, 0, 6}) {
+                int r = landing(snap, c);
+                if (r < 0) continue;
+                snap[r][c] = 2;
+                int s = -negamax(snap, 1, depth - 1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE);
+                snap[r][c] = 0;
+                if (s > best) { best = s; pick = c; }
+            }
+            final int at = pick;
+            cpuDone(gn, () -> { col = at; drop(at, 2); });
+        }, "connect4-ai").start();
     }
 
     /** Score from the point of view of {@code player} to move. */
-    private int negamax(int player, int depth, int alpha, int beta) {
-        int w = check();
+    private static int negamax(int[][] g, int player, int depth, int alpha, int beta) {
+        int w = check(g);
         if (w > 0) return w == player ? 100_000 + depth : -100_000 - depth;
         if (w == 0) return 0;
-        if (depth == 0) return evaluate(player) - evaluate(3 - player);
+        if (depth == 0) return evaluate(g, player) - evaluate(g, 3 - player);
         for (int c : new int[]{3, 2, 4, 1, 5, 0, 6}) {
-            int r = landing(c);
+            int r = landing(g, c);
             if (r < 0) continue;
             g[r][c] = player;
-            int s = -negamax(3 - player, depth - 1, -beta, -alpha);
+            int s = -negamax(g, 3 - player, depth - 1, -beta, -alpha);
             g[r][c] = 0;
             if (s > alpha) alpha = s;
             if (alpha >= beta) break;
@@ -110,7 +119,7 @@ public class ConnectFour extends Game {
         return alpha;
     }
 
-    private int evaluate(int p) {
+    private static int evaluate(int[][] g, int p) {
         int score = 0;
         for (int r = 0; r < H; r++) if (g[r][3] == p) score += 3;
         int[][] dirs = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
@@ -128,7 +137,9 @@ public class ConnectFour extends Game {
         return score;
     }
 
-    private int check() {
+    private int check() { return check(g); }
+
+    private static int check(int[][] g) {
         int[][] dirs = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
         for (int r = 0; r < H; r++) for (int c = 0; c < W; c++) {
             int v = g[r][c];
@@ -342,7 +353,12 @@ public class ConnectFour extends Game {
             if (t >= 1f) {
                 g[dropRow][dropCol] = dropPlayer;
                 dropCol = -1;
-                post(this::endTurn);   // not from inside draw: it updates other views
+                settling = true;       // busy until the turn has really passed, so a quick second OK can't drop again
+                post(() -> {           // not from inside draw: it updates other views
+                    if (!settling) return;   // a new round started meanwhile
+                    settling = false;
+                    endTurn();
+                });
             } else {
                 postInvalidateOnAnimation();
             }

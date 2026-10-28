@@ -2,7 +2,6 @@ package home.aurora
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -209,11 +208,9 @@ class TerminalRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     // ------------------------------------------------------------------ the cabinet, painted once
 
     private fun cabinet(c: Canvas) {
-        val o = BitmapFactory.Options()
-        o.inScaled = false
-        val plate = BitmapFactory.decodeResource(home.resources, R.drawable.cs_bezel, o)
+        // decoded off the main thread and cached; the cabinet paints itself once it lands
+        val plate = plate(R.drawable.cs_bezel, false) { repaint(glass) } ?: return
         c.drawBitmap(plate, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), paint())
-        plate.recycle()
 
         // the badge in its recess
         val gold = textPaint(13f, 0xFFC9CDD0.toInt(), tf("sans-serif-condensed", Typeface.BOLD_ITALIC))

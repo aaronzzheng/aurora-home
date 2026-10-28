@@ -3,7 +3,6 @@ package home.aurora
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -59,7 +58,9 @@ constructor(c: Context, prefix: String) : View(c) {
     private var intervalMs = 5 * 60_000L
     private var speed = 1f
     private var running = false
+    private var wanted = false   // start() was asked for; it runs while we're attached
     private var loading = false
+    private var frameMs = FRAME_MS
     private var listener: Listener? = null
     private var parallax = 0f
     private var parallaxTarget = 0f   // px
@@ -120,6 +121,9 @@ constructor(c: Context, prefix: String) : View(c) {
     fun setIntervalMs(ms: Long) { intervalMs = ms; if (running) scheduleAdvance() }
     fun setSpeed(s: Float) { speed = s }
 
+    /** Time between frames of the drift (the crossfade stays smooth); the screensaver asks for less. */
+    fun setFrameMs(ms: Long) { frameMs = Math.max(FRAME_MS, ms) }
+
     /** Shift the wallpaper slightly against focus movement; -1..1. */
     fun setParallax(amount: Float) {
         parallaxTarget = amount * resources.displayMetrics.density * 14
@@ -129,7 +133,14 @@ constructor(c: Context, prefix: String) : View(c) {
     fun addFollower(v: View) { if (!followers.contains(v)) followers.add(v) }
     fun removeFollower(v: View) { followers.remove(v) }
 
+    /**
+     * Start drifting and changing. Until we're attached to a window this only notes
+     * the request (and onAttachedToWindow starts it), so a wallpaper nobody shows
+     * never decodes or draws.
+     */
     fun start() {
+        wanted = true
+        if (!isAttachedToWindow) return
         running = true
         if (painted != null) { invalidate(); return }
         if (cur == null && off(context).contains(if (titles.isEmpty()) "" else titles[index])) next()
@@ -139,8 +150,24 @@ constructor(c: Context, prefix: String) : View(c) {
     }
 
     fun stop() {
+        wanted = false
+        halt()
+    }
+
+    private fun halt() {
         running = false
         main.removeCallbacks(advance)
+        prev = null   // no crossfade is coming; let GC have it
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (wanted && !running) start()
+    }
+
+    override fun onDetachedFromWindow() {
+        halt()   // still wanted: attaching again picks up where it left off
+        super.onDetachedFromWindow()
     }
 
     fun titles(): MutableList<String> = ArrayList(titles)
@@ -167,20 +194,34 @@ constructor(c: Context, prefix: String) : View(c) {
         val resFull = full[i]
         val resBlur = blur[i]
         val t = titles[i]
+        // just enough pixels to cover the screen at the drift's deepest zoom
+        val dm = resources.displayMetrics
+        val tw = (Math.max(width, dm.widthPixels) * 1.12f).toInt()
+        val th = (Math.max(height, dm.heightPixels) * 1.12f).toInt()
         Thread({
-            val o = BitmapFactory.Options()
-            o.inScaled = false
-            val f = BitmapFactory.decodeResource(resources, resFull, o)
-            val b = BitmapFactory.decodeResource(resources, resBlur, o)
-            main.post {
-                loading = false
-                prev = cur
-                cur = Frame(f, b, t, i)
-                listener?.onWallpaper(t)
-                scheduleAdvance()
-                invalidate()
+            var f: Bitmap? = null
+            var b: Bitmap? = null
+            try {
+                f = Bitmaps.res(resources, resFull, tw, th)
+                if (f != null) b = Bitmaps.res(resources, resBlur, 0, 0)
+            } catch (e: Throwable) {
+                // out of memory and the like: keep what's showing
+            } finally {
+                val full = f
+                val soft = b
+                main.post { loaded(full, soft, t, i) }
             }
         }, "wallpaper").start()
+    }
+
+    private fun loaded(f: Bitmap?, b: Bitmap?, t: String, i: Int) {
+        loading = false
+        if (f == null || b == null) { scheduleAdvance(); return }   // try the next one later
+        prev = if (running) cur else null
+        cur = Frame(f, b, t, i)
+        listener?.onWallpaper(t)
+        scheduleAdvance()
+        invalidate()
     }
 
     /** Matrix mapping a frame's full-size bitmap onto this view right now. */
@@ -253,8 +294,9 @@ constructor(c: Context, prefix: String) : View(c) {
         }
         for (f in followers) f.invalidate()
         // After a few minutes without a button press nobody's watching closely: half the frame rate.
-        val idle = SystemClock.uptimeMillis() - lastInput
-        if (running && (cur == null || !cur!!.still)) postInvalidateDelayed(if (idle > IDLE_MS) FRAME_MS * 2 else FRAME_MS)
+        // The crossfade always gets full speed.
+        val ms = if (p != null) FRAME_MS else Math.max(frameMs, if (idle()) FRAME_MS * 2 else FRAME_MS)
+        if (running && (cur == null || !cur!!.still)) postInvalidateDelayed(ms)
     }
 
     companion object {
@@ -267,6 +309,10 @@ constructor(c: Context, prefix: String) : View(c) {
         /** A button was pressed: back to the full frame rate. */
         @JvmStatic
         fun input() { lastInput = SystemClock.uptimeMillis() }
+
+        /** No button pressed for a few minutes: animations can drop to a lower frame rate. */
+        @JvmStatic
+        fun idle(): Boolean = SystemClock.uptimeMillis() - lastInput > IDLE_MS
 
         private fun title(slug: String): String {
             val b = StringBuilder()

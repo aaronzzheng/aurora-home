@@ -128,7 +128,7 @@ class RemoteServer(private val svc: AuroraService, private val port: Int) {
             s.use { sock ->
                 sock.soTimeout = 5_000
                 val a = sock.inetAddress
-                if (!(a.isSiteLocalAddress || a.isLoopbackAddress || a.isLinkLocalAddress)) return
+                if (!onLan(a)) return
                 val r = parse(BufferedInputStream(sock.getInputStream()), System.currentTimeMillis() + REQUEST_MS) ?: return
                 r.ip = a.hostAddress ?: ""
                 val out = sock.getOutputStream()
@@ -141,17 +141,28 @@ class RemoteServer(private val svc: AuroraService, private val port: Int) {
     }
 
     /**
+     * Home-network addresses only: private IPv4, IPv6 unique-local (fd00::/8), link-local,
+     * loopback, and 100.64.0.0/10 (carrier-grade NAT, also what Tailscale hands out).
+     */
+    private fun onLan(a: InetAddress): Boolean {
+        if (a.isSiteLocalAddress || a.isLoopbackAddress || a.isLinkLocalAddress) return true
+        val b = a.address
+        if (b.size == 16) return (b[0].toInt() and 0xFE) == 0xFC
+        return b.size == 4 && (b[0].toInt() and 0xFF) == 100 && (b[1].toInt() and 0xC0) == 64
+    }
+
+    /**
      * A web page on another site can't send its requests here by pointing its own
      * name at this TV (DNS rebinding): the Host must be this TV's address or localhost.
      */
     private fun forThisTv(host: String?): Boolean {
         var h = host?.trim()?.lowercase(Locale.ROOT) ?: return false
-        if (h.startsWith("[")) return h.startsWith("[::1]")
-        h = h.substringBefore(':')
-        if (h == "localhost" || h == "127.0.0.1") return true
+        h = if (h.startsWith("[")) h.substring(1).substringBefore(']') else h.substringBefore(':')
+        if (h == "localhost" || h == "127.0.0.1" || h == "::1") return true
         return try {
+            // IPv6 addresses come back with a scope ("fe80::1%wlan0"); the Host header has none.
             NetworkInterface.getNetworkInterfaces().toList()
-                .any { n -> n.inetAddresses.toList().any { it.hostAddress == h } }
+                .any { n -> n.inetAddresses.toList().any { it.hostAddress?.substringBefore('%') == h } }
         } catch (e: Exception) {
             false
         }

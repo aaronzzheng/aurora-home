@@ -369,7 +369,9 @@ class AuroraSettings(private val home: HomeActivity) {
     private fun security(r: Security.Report) {
         val items = ArrayList<GlassMenu.Item>()
         if (r.serviceOff) items.add(GlassMenu.Item.action("⚠  Aurora's background service is off: bedtime, the sleep timer and the phone remote aren't working, and Kid lock only covers the home screen") { openServiceSettings(home) })
-        if (r.networkDebugging) {
+        if (r.networkDebugging && r.forFullRemote) {
+            items.add(GlassMenu.Item.action("•  Network debugging is on for Arrows in every app: only choose Allow on the TV for Aurora and your own computer") { networkDebugging() })
+        } else if (r.networkDebugging) {
             items.add(GlassMenu.Item.action("⚠  Network debugging is ON: anyone on your Wi-Fi can install apps on this TV and control it") { networkDebugging() })
         } else {
             items.add(GlassMenu.Item.action("✓  Network debugging is off" + (if (r.usbDebugging) "  ·  USB debugging is on" else "")) { networkDebugging() })
@@ -443,7 +445,9 @@ class AuroraSettings(private val home: HomeActivity) {
         GlassMenu.message(home, "Arrows in every app",
             "The phone's arrows already work on this home screen and in most apps. To also reach apps that draw their own " +
             "screens, like YouTube and Netflix, Aurora presses the buttons through the TV's network debugging.\n\n" +
-            "The TV will ask \"Allow debugging?\" — choose Always allow, then Allow.") {
+            "The TV will ask \"Allow debugging?\" — choose Always allow, then Allow.\n\n" +
+            "Network debugging has to stay on for this. Other devices on your Wi-Fi can then ask to connect too: " +
+            "if the TV ever asks \"Allow debugging?\" when you didn't expect it, choose Cancel.") {
             s.setFullRemote(true)
             s.adb().connect { ok ->
                 home.runOnUiThread {

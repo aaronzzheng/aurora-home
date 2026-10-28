@@ -29,11 +29,13 @@ object Security {
         @JvmField var networkDebugging = false
         @JvmField var usbDebugging = false
         @JvmField var serviceOff = false
+        /** Network debugging is on because "Arrows in every app" needs it: a known trade-off, not a surprise. */
+        @JvmField var forFullRemote = false
         @JvmField val sideloaded = mutableListOf<Apps.App>()
         @JvmField val installers = mutableListOf<Apps.App>()
         @JvmField val sideloadedBy = mutableListOf<String>()
 
-        fun warnings(): Int = listOf(serviceOff, networkDebugging, sideloaded.isNotEmpty(), installers.isNotEmpty()).count { it }
+        fun warnings(): Int = listOf(serviceOff, networkDebugging && !forFullRemote, sideloaded.isNotEmpty(), installers.isNotEmpty()).count { it }
     }
 
     /** Run the checks. Opens a socket, so call it off the main thread. */
@@ -45,6 +47,7 @@ object Security {
         r.usbDebugging = Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
         // "adb tcpip 5555" listens on every interface; Android 11+ wireless debugging has its own flag.
         r.networkDebugging = r.usbDebugging && (Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1 || listening(ADB_PORT))
+        r.forFullRemote = r.networkDebugging && Prefs.of(c).getBoolean("remote_full", false)
         val pm = c.packageManager
         val ops = c.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         for (a in apps) {

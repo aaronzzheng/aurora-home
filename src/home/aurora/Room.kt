@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import java.text.SimpleDateFormat
@@ -90,7 +91,7 @@ abstract class Room(h: HomeActivity, t: HomeTheme) {
         this.now = now
         this.hhmm = hhmm
         clock.setTime(hhmm)
-        date.text = SimpleDateFormat("EEEE · MMMM d", Locale.getDefault()).format(now).uppercase(Locale.getDefault())
+        date.text = fmt("EEEE · MMMM d", now).uppercase(Locale.getDefault())
     }
 
     /** Timer and sleep text changed. */
@@ -159,6 +160,25 @@ abstract class Room(h: HomeActivity, t: HomeTheme) {
         place(v, 0f, 0f, W.toFloat(), H.toFloat())
         return v
     }
+
+    /** Paint `v` again: art made by [art] redraws its bitmap, anything else just invalidates. */
+    open fun repaint(v: View) { if (v is Cached) v.repaint() else v.invalidate() }
+
+    /** Paint the whole stage again, art and glass alike: a plate they draw has just arrived. */
+    open fun repaintAll() { repaintTree(stage) }
+
+    private fun repaintTree(v: View) {
+        repaint(v)
+        if (v is ViewGroup) for (i in 0 until v.childCount) repaintTree(v.getChildAt(i))
+    }
+
+    /**
+     * A bundled photo plate sized for this screen (`w` × `h` px; the whole stage by default),
+     * decoded off the main thread and kept across rebuilds. Null until it's ready, then
+     * `ready` runs on the main thread. Shared: never recycle it.
+     */
+    open fun plate(id: Int, opaque: Boolean, w: Int = (W * k).roundToInt(), h: Int = (H * k).roundToInt(), ready: (Bitmap) -> Unit): Bitmap? =
+        Bitmaps.plate(home.resources, id, w, h, opaque, ready)
 
     /** A small picture that is redrawn only when invalidated. */
     open fun drawn(a: Art, x: Float, y: Float, w: Float, h: Float): View {
@@ -251,13 +271,32 @@ abstract class Room(h: HomeActivity, t: HomeTheme) {
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
             if (w <= 0 || h <= 0) return
             if (bmp != null) bmp!!.recycle()
-            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val c = Canvas(bmp!!)
-            c.scale(room.k, room.k)
-            art.draw(c)
+            bmp = null
+            paint()
         }
 
-        override fun onDraw(c: Canvas) { if (bmp != null) c.drawBitmap(bmp!!, 0f, 0f, null) }
+        private fun paint() {
+            val w = width
+            val h = height
+            if (w <= 0 || h <= 0) return
+            val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val c = Canvas(b)
+            c.scale(room.k, room.k)
+            art.draw(c)
+            bmp = b
+        }
+
+        /** Paint it afresh on the next frame (the old bitmap is left to GC: the render thread may still hold it). */
+        fun repaint() {
+            bmp = null
+            invalidate()
+        }
+
+        override fun onDraw(c: Canvas) {
+            // painted lazily too, so coming back after a detach (which frees the bitmap) isn't blank
+            if (bmp == null || bmp!!.isRecycled) paint()
+            if (bmp != null) c.drawBitmap(bmp!!, 0f, 0f, null)
+        }
 
         override fun onDetachedFromWindow() {
             super.onDetachedFromWindow()
@@ -400,7 +439,18 @@ abstract class Room(h: HomeActivity, t: HomeTheme) {
             return s.substring(0, s.length - 2) + ":" + s.substring(s.length - 2)
         }
 
-        @JvmStatic fun fmt(pattern: String, d: Date): String = SimpleDateFormat(pattern, Locale.getDefault()).format(d)
+        private val formats = HashMap<String, SimpleDateFormat>()
+        private var formatsLocale: Locale? = null
+
+        /** `d` in `pattern`; the formatters are kept, and rebuilt when the language changes. */
+        @JvmStatic
+        fun fmt(pattern: String, d: Date): String {
+            synchronized(formats) {
+                val l = Locale.getDefault()
+                if (l != formatsLocale) { formats.clear(); formatsLocale = l }
+                return formats.getOrPut(pattern) { SimpleDateFormat(pattern, l) }.format(d)
+            }
+        }
 
         /** A simple line icon for an everyday control, `s` units across. */
         @JvmStatic

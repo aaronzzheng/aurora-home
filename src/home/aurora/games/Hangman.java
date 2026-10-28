@@ -95,10 +95,13 @@ public class Hangman extends Game {
                 word = entry.toString();
                 entering = false;
                 turn = 3 - turn;
-                kc = Math.min(kc, KEYS[3].length() - 1);
+                kr = kc = 0;   // don't leave the cursor on the word's last letter
                 host.onTurn(turn);
                 host.onInfo(word.length() + " letters  ·  pass the remote");
-            } else if (entry.length() < 12) entry.append(KEYS[kr].charAt(kc));
+            } else if (entry.length() < 12) {
+                entry.append(KEYS[kr].charAt(kc));
+                kr = kc = 0;   // back to A, so the screen never rests on a letter of the secret word
+            }
             if (entering) host.onInfo("Secret word:  " + dots(entry.length()));
             return true;
         }

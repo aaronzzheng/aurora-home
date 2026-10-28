@@ -169,11 +169,7 @@ class MinimalRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     private fun isDay(d: Date): Boolean {
         val cal = Calendar.getInstance()
         cal.time = d
-        var h = cal.get(Calendar.HOUR_OF_DAY)
-        // preview builds can pretend it's another hour, like the theme's own date override
-        val p = Prefs.of(home)
-        if ((home.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && p.contains("debug_hour")) h = p.getInt("debug_hour", h)
-        return h in 7..18
+        return HomeTheme.isDay(HomeTheme.hour(home, cal))   // preview builds can pretend it's another hour
     }
 
     // ------------------------------------------------------------------ the stock

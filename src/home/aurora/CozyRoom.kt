@@ -4,7 +4,6 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -45,10 +44,9 @@ class CozyRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     private var flicker: ObjectAnimator? = null
 
     override fun build() {
-        val o = BitmapFactory.Options()
-        o.inScaled = false
-        photo = BitmapFactory.decodeResource(home.resources, R.drawable.cozy_fire, o)
-        blur = BitmapFactory.decodeResource(home.resources, R.drawable.cozy_fire_blur, o)
+        // the photographs come off the main thread (cached after the first time); the room fills in when they land
+        photo = plate(R.drawable.cozy_fire, true) { b -> photo = b; repaintAll() }
+        blur = plate(R.drawable.cozy_fire_blur, false) { b -> blur = b; repaintAll() }
 
         art { c -> hearth(c) }
 
@@ -165,7 +163,8 @@ class CozyRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
 
     private fun hearth(c: Canvas) {
         val p = Room.paint()
-        photo?.let { c.drawBitmap(it, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), p) }
+        val photo = photo ?: return   // nothing until the photograph is in
+        c.drawBitmap(photo, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), p)
         // the dark of the room around the hearth, deeper where the text sits (soft-edged pools)
         shade(c, 150f, 90f, 420f, 230f, 0xC0080402.toInt())
         shade(c, 860f, 70f, 380f, 160f, 0xB3080402.toInt())

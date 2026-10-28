@@ -75,6 +75,21 @@ class HomeTheme private constructor() {
         @JvmStatic
         fun alpha(color: Int, a: Float): Int = ((a * 255).toInt() shl 24) or (color and 0xFFFFFF)
 
+        /** Day is 07:00 to 19:00, everywhere a look changes with the hour. */
+        @JvmStatic
+        fun isDay(hour: Int): Boolean = hour >= 7 && hour < 19
+
+        @JvmStatic
+        fun isNight(hour: Int): Boolean = !isDay(hour)
+
+        /** The hour now; preview builds can pretend it's another one (see [current]). */
+        @JvmStatic
+        fun hour(c: Context, now: Calendar = Calendar.getInstance()): Int {
+            val p = Prefs.of(c)
+            if ((c.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && p.contains("debug_hour")) return p.getInt("debug_hour", 12)
+            return now.get(Calendar.HOUR_OF_DAY)
+        }
+
         /** Plain Aurora; also what the games screen's menus use. */
         @JvmStatic
         fun aurora(): HomeTheme = make("aurora")
@@ -99,10 +114,10 @@ class HomeTheme private constructor() {
             val id = if (saved in IDS) saved else "aurora"   // looks that were retired fall back to Aurora
             val t: HomeTheme
             if (id == "daynight") {
-                val h = now.get(Calendar.HOUR_OF_DAY)
-                t = make(if (h >= 7 && h < 19) "light" else "cozy")
+                val day = isDay(now.get(Calendar.HOUR_OF_DAY))
+                t = make(if (day) "light" else "cozy")
                 t.name = "Day and night"
-                t.focusPrefix = if (h >= 7 && h < 19) "DAYTIME" else "EVENING"
+                t.focusPrefix = if (day) "DAYTIME" else "EVENING"
             } else {
                 t = make(id)
             }

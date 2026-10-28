@@ -9,9 +9,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import java.util.Random
 
 /**
@@ -35,7 +33,7 @@ class AuroraDream : DreamService() {
             val now = Date()
             val h24 = android.text.format.DateFormat.is24HourFormat(this@AuroraDream)
             clock.setTime(HomeActivity.flipTime(now, h24))
-            date.text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now)
+            date.text = Room.fmt("EEEE, MMMM d", now)   // kept formatter, rebuilt if the language changes
             h.postDelayed(this, 60_000 - System.currentTimeMillis() % 60_000)
         }
     }
@@ -67,6 +65,7 @@ class AuroraDream : DreamService() {
         if (artMode) {
             val art = ArtView(this)
             this.art = art
+            art.setFrameMs(DRIFT_MS)
             art.setListener { fallBackToWallpapers() }   // offline: show wallpapers instead
             root.addView(art, FrameLayout.LayoutParams(-1, -1))
         } else {
@@ -98,6 +97,7 @@ class AuroraDream : DreamService() {
         this.wall = wall
         wall.setIntervalMs(60_000)
         wall.setSpeed(0.7f)
+        wall.setFrameMs(DRIFT_MS)
         root.addView(wall, 0, FrameLayout.LayoutParams(-1, -1))
         val shade = View(this)
         shade.setBackgroundColor(0x40000000)
@@ -127,5 +127,10 @@ class AuroraDream : DreamService() {
 
     private fun dp(v: Float): Int {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics))
+    }
+
+    companion object {
+        // The drift and zoom are so slow that ten frames a second looks the same, for a third of the work.
+        private const val DRIFT_MS = 100L
     }
 }

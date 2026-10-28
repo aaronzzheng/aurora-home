@@ -1,7 +1,6 @@
 package home.aurora
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -20,6 +19,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Space: the view from a crew station.  The whole screen is the cabin wall
@@ -63,6 +63,7 @@ class SpaceRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     private lateinit var earth: Earth
     private lateinit var clockView: View
     private lateinit var env: View
+    private lateinit var wall: View
     private val blanks = ArrayList<View>()
     private var target = "STANDBY"
     private var night = false
@@ -70,7 +71,7 @@ class SpaceRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     override fun build() {
         night = isNight()
         earth = place(Earth(), CX - R_GLASS - 2, CY - R_GLASS - 2, R_GLASS * 2 + 4, R_GLASS * 2 + 4)
-        art { c -> cabin(c) }
+        wall = art { c -> cabin(c) }
         clockView = drawn({ c -> missionClock(c) }, CLOCKBOX.left, CLOCKBOX.top, CLOCKBOX.width(), CLOCKBOX.height())
         env = drawn({ c -> environment(c) }, ENVBOX.left, ENVBOX.top, ENVBOX.width(), ENVBOX.height())
         clock = ClockFace { s -> hhmm = s; clockView.invalidate() }
@@ -153,22 +154,15 @@ class SpaceRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
         earth.animate().scaleX(1f).scaleY(1f).setDuration(900).setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
-    private fun isNight(): Boolean {
-        var h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        // preview builds can pretend it's another hour (see HomeTheme.current)
-        val p = Prefs.of(home)
-        if ((home.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && p.contains("debug_hour")) h = p.getInt("debug_hour", h)
-        return h >= 19 || h < 6
-    }
+    /** City lights from 19:00 to 07:00, the same hours as every other look. */
+    private fun isNight(): Boolean = HomeTheme.isNight(HomeTheme.hour(home))
 
     // ------------------------------------------------------------------ the cabin wall, painted once
 
     private fun cabin(c: Canvas) {
-        val o = BitmapFactory.Options()
-        o.inScaled = false
-        val plate = BitmapFactory.decodeResource(home.resources, R.drawable.space_cabin, o)
+        // decoded off the main thread and cached; the wall paints itself once it lands
+        val plate = plate(R.drawable.space_cabin, false) { repaint(wall) } ?: return
         c.drawBitmap(plate, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), paint())
-        plate.recycle()
 
         // white panel lettering, silk-screened onto the paint
         engrave(c, "MISSION TIME", CLOCKBOX.left + 2, CLOCKBOX.top - 9, 7.5f)
@@ -506,6 +500,7 @@ class SpaceRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
     /** Earth through the cupola: a real photograph, swapped for city lights at night. */
     private inner class Earth : View(home) {
         private var bmp: Bitmap? = null
+        private var want = 0   // the photo asked for last; a slower one landing late is ignored
         private val p = paint()
 
         init {
@@ -513,13 +508,18 @@ class SpaceRoom(h: HomeActivity, t: HomeTheme) : Room(h, t) {
             load()
         }
 
+        /** Off the main thread and cached; the old photo (or black) stays until the new one lands. */
         fun load() {
-            val o = BitmapFactory.Options()
-            o.inScaled = false
-            val b = BitmapFactory.decodeResource(home.resources, if (night) R.drawable.sp_earth_at_night else R.drawable.space_earth, o)
+            val id = if (night) R.drawable.sp_earth_at_night else R.drawable.space_earth
+            want = id
+            val s = px(R_GLASS * 2 + 4).roundToInt()
+            val b = plate(id, false, s, s) { b -> if (want == id) show(b) }
+            if (b != null) show(b)
+        }
+
+        private fun show(b: Bitmap) {
             p.shader = null
-            bmp?.recycle()
-            bmp = b
+            bmp = b   // shared with the cache: never recycled here
             shaderFor(width, height)
             invalidate()
         }

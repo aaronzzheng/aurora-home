@@ -49,6 +49,8 @@ open class ThemeFx(c: Context, private val kind: Int, private var wash: Int) : V
     private var shootAt = 0L
     private var shootX = 0f
     private var shootY = 0f
+    private var streak: android.graphics.LinearGradient? = null   // made once, moved with a matrix
+    private val streakAt = android.graphics.Matrix()
 
     init {
         u = c.resources.displayMetrics.density
@@ -178,7 +180,8 @@ open class ThemeFx(c: Context, private val kind: Int, private var wash: Int) : V
         }
         if (kind == STARS) shootingStar(c, now, w, h)
         if (kind == FIREWORKS) fireworks(c, now, w, h)
-        if (running) postInvalidateDelayed(if (n == 0) 66 else 33)
+        // nobody at the remote for a few minutes: fewer frames
+        if (running) postInvalidateDelayed(if (n == 0 || WallpaperView.idle()) 66 else 33)
     }
 
     private fun drawOne(c: Canvas, i: Int, t: Float) {
@@ -295,8 +298,12 @@ open class ThemeFx(c: Context, private val kind: Int, private var wash: Int) : V
         val dx = -k * 380 * u
         val dy = k * 160 * u
         p.strokeWidth = 1.6f * u
-        p.shader = android.graphics.LinearGradient(shootX + dx, shootY + dy, shootX + dx + len, shootY + dy - len * 0.42f,
-                Color.alpha(0xFFFFFFFF.toInt(), 1 - k), 0x00FFFFFF, Shader.TileMode.CLAMP)
+        val g = streak ?: android.graphics.LinearGradient(0f, 0f, len, -len * 0.42f,
+                0xFFFFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP).also { streak = it }
+        streakAt.setTranslate(shootX + dx, shootY + dy)
+        g.setLocalMatrix(streakAt)
+        p.shader = g
+        p.color = Color.alpha(0xFFFFFFFF.toInt(), 1 - k)   // the fade, through the paint's alpha
         c.drawLine(shootX + dx, shootY + dy, shootX + dx + len, shootY + dy - len * 0.42f, p)
         p.shader = null
     }

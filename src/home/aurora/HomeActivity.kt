@@ -39,7 +39,7 @@ class HomeActivity : Activity() {
         @JvmStatic
         fun nextWallpaper() {
             val h = current.get()
-            if (h != null) h.wall!!.next()
+            if (h != null && h.wall!!.parent != null) h.wall!!.next()
         }
 
         @JvmStatic
@@ -402,7 +402,8 @@ class HomeActivity : Activity() {
         if (themeChanged()) return
         Sounds.setTheme(this, theme!!.sounds)
         applyHomePrefs()
-        wall!!.start()
+        // Only the looks that show the wallpaper run it; the rest would decode photos for nothing.
+        if (wall!!.parent != null) wall!!.start()
         fx!!.start()
         if (themeFx != null) themeFx!!.start()
         if (room != null) room!!.start()
@@ -414,8 +415,10 @@ class HomeActivity : Activity() {
 
     /** A phone sent a backup: show what's in it and only replace the settings on a yes (and the PIN). */
     private fun askRestore() {
-        val b = Backup.take() ?: return
+        if (!Backup.waiting()) return
+        // Taken only once the PIN is in: a PIN lockout leaves the backup waiting for the next try.
         withPin {
+            val b = Backup.take() ?: return@withPin
             val items = ArrayList<GlassMenu.Item>()
             items.add(GlassMenu.Item.action("Restore  ·  replace this TV's settings") {
                 try {
@@ -770,7 +773,7 @@ class HomeActivity : Activity() {
         if (System.currentTimeMillis() - weatherAt < 30 * 60_000) return
         weatherAt = System.currentTimeMillis()
         Weather.load(this) { i ->
-            if (i == null) { weatherAt = 0; return@load }   // offline: try again next minute
+            if (i == null) { weatherAt = 0; return@load }   // offline: ask again next minute (Weather backs off)
             temp!!.text = i.temp
             fx!!.setWeatherCode(i.code)
             sky!!.text = i.desc + "\n" + i.hilo + (if (i.place!!.isEmpty()) "" else "  ·  " + i.place)
@@ -842,7 +845,10 @@ class HomeActivity : Activity() {
         val p = Prefs.of(this)
         if (!Pin.isSet(p)) { then.run(); return }
         // After 5 wrong PINs, wait a minute; each further miss doubles the wait (up to an hour).
-        val wait = p.getLong("pin_wait_until", 0) - System.currentTimeMillis()
+        // Measured on both clocks, so setting the TV's clock forward doesn't end the wait early.
+        val sinceSet = android.os.SystemClock.elapsedRealtime() - p.getLong("pin_wait_rt", Long.MAX_VALUE)
+        val wait = maxOf(p.getLong("pin_wait_until", 0) - System.currentTimeMillis(),
+            if (sinceSet >= 0) p.getLong("pin_wait_ms", 0) - sinceSet else 0)
         if (wait > 0) {
             val mins = (wait + 59_999) / 60_000
             Toast.makeText(this, "Too many wrong PINs. Try again in " + mins + (if (mins == 1L) " minute" else " minutes"), Toast.LENGTH_LONG).show()
@@ -850,7 +856,7 @@ class HomeActivity : Activity() {
         }
         GlassMenu.pin(this, "Enter the PIN") { entered ->
             if (Pin.check(p, entered)) {
-                p.edit().remove("pin_misses").remove("pin_wait_until").apply()
+                p.edit().remove("pin_misses").remove("pin_wait_until").remove("pin_wait_rt").remove("pin_wait_ms").apply()
                 then.run()
                 return@pin
             }
@@ -859,6 +865,7 @@ class HomeActivity : Activity() {
             if (misses >= 5) {
                 val mins = Math.min(60L, 1L shl Math.min(6, misses - 5))
                 e.putLong("pin_wait_until", System.currentTimeMillis() + mins * 60_000)
+                    .putLong("pin_wait_rt", android.os.SystemClock.elapsedRealtime()).putLong("pin_wait_ms", mins * 60_000)
                 Toast.makeText(this, "Wrong PIN. Locked for " + mins + (if (mins == 1L) " minute" else " minutes"), Toast.LENGTH_LONG).show()
             } else {
                 Toast.makeText(this, "Wrong PIN  ·  " + (5 - misses) + " tries left", Toast.LENGTH_SHORT).show()

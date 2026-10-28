@@ -15,7 +15,7 @@ import java.net.URLEncoder
 /**
  * Current weather from Open-Meteo (free, no account, no key). The location is
  * looked up once from the public IP (ipapi.co) unless set from the phone remote.
- * Results are cached for 30 minutes.
+ * Results are cached for 30 minutes; offline, it backs off and shows the last weather it had.
  */
 object Weather {
 
@@ -46,20 +46,66 @@ object Weather {
         }, "weather").start()
     }
 
+    // Offline, a failed fetch waits 1, 5, 15, then 60 minutes before the next try (the home
+    // screen asks every minute). The IP lookup backs off on its own: ipapi.co has a daily limit.
+    private val BACKOFF_MS = longArrayOf(60_000L, 5 * 60_000L, 15 * 60_000L, 60 * 60_000L)
+    @Volatile private var misses = 0
+    @Volatile private var retryAt = 0L
+    @Volatile private var ipMisses = 0
+    @Volatile private var ipRetryAt = 0L
+
+    private fun backoff(n: Int): Long = BACKOFF_MS[minOf(n, BACKOFF_MS.size) - 1]
+
+    /** The place or units changed: fetch straight away instead of waiting out a backoff. */
+    @JvmStatic
+    fun retryNow() {
+        misses = 0; retryAt = 0
+        ipMisses = 0; ipRetryAt = 0
+    }
+
+    @Synchronized
     @Throws(Exception::class)
     private fun fetch(c: Context): Info {
         val p = prefs(c)
-        if (!p.contains("w_lat")) locateByIp(c)
-        var json = p.getString("w_cache", null)
-        if (json == null || System.currentTimeMillis() - p.getLong("w_time", 0) > CACHE_MS) {
+        val now = System.currentTimeMillis()
+        val cached = p.getString("w_cache", null)
+        val fresh = cached != null && now - p.getLong("w_time", 0) <= CACHE_MS
+        if (fresh || now < retryAt) return parse(p, cached ?: throw IOException("waiting to retry"))
+        try {
+            if (!p.contains("w_lat")) {
+                if (now < ipRetryAt) throw IOException("waiting to retry the location")
+                try {
+                    locateByIp(c)
+                    ipMisses = 0
+                } catch (e: Exception) {
+                    ipMisses++
+                    ipRetryAt = now + backoff(ipMisses)
+                    throw e
+                }
+            }
             val f = p.getBoolean("w_fahrenheit", true)
-            json = get("https://api.open-meteo.com/v1/forecast?latitude=" + p.getFloat("w_lat", 0f) +
+            val json = get("https://api.open-meteo.com/v1/forecast?latitude=" + p.getFloat("w_lat", 0f) +
                 "&longitude=" + p.getFloat("w_lon", 0f) +
                 "&current=temperature_2m,weather_code,is_day" +
                 "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto" +
                 (if (f) "&temperature_unit=fahrenheit" else ""))
-            p.edit().putString("w_cache", json).putLong("w_time", System.currentTimeMillis()).apply()
+            // Checked before it's cached, so a broken reply isn't kept for half an hour.
+            val i = parse(p, json)
+            p.edit().putString("w_cache", json).putLong("w_time", now).apply()
+            misses = 0
+            retryAt = 0
+            return i
+        } catch (e: Exception) {
+            misses++
+            retryAt = now + backoff(misses)
+            // Old weather beats "unavailable".
+            if (cached != null) try { return parse(p, cached) } catch (ignored: Exception) { }
+            throw e
         }
+    }
+
+    @Throws(Exception::class)
+    private fun parse(p: SharedPreferences, json: String): Info {
         val o = JSONObject(json)
         val cur = o.getJSONObject("current")
         val d = o.getJSONObject("daily")
@@ -100,6 +146,7 @@ object Weather {
             .putFloat("w_lat", lat.toFloat()).putFloat("w_lon", lon.toFloat())
             .putString("w_place", place)
             .remove("w_cache")
+        retryNow()
         if (!prefs(c).getBoolean("w_unit_set", false))
             e.putBoolean("w_fahrenheit", "US".equals(country, ignoreCase = true) || "LR".equals(country, ignoreCase = true))
         e.apply()
@@ -111,12 +158,14 @@ object Weather {
     @JvmStatic
     fun setFahrenheit(c: Context, f: Boolean) {
         prefs(c).edit().putBoolean("w_fahrenheit", f).putBoolean("w_unit_set", true).remove("w_cache").apply()
+        retryNow()
     }
 
     /** Forget the city and look it up from the internet connection again. */
     @JvmStatic
     fun useMyLocation(c: Context) {
         prefs(c).edit().remove("w_lat").remove("w_lon").remove("w_place").remove("w_cache").apply()
+        retryNow()
     }
 
     @JvmStatic
