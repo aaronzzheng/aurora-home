@@ -77,9 +77,10 @@ object Sounds {
     /** Step to the next level (wrapping round) and play a sample at it. */
     @JvmStatic
     fun nextLevel(c: Context) {
+        // Step from the step shown, so a level saved between steps (older versions) still moves.
         val l = level(c)
-        val i = LEVELS.indexOfFirst { it > l }.let { if (it < 0) 0 else it }
-        prefs.edit().putInt("ui_sounds_level", LEVELS[i]).apply()
+        val shown = LEVELS.indexOfFirst { it >= l }.let { if (it < 0) LEVELS.size - 1 else it }
+        prefs.edit().putInt("ui_sounds_level", LEVELS[(shown + 1) % LEVELS.size]).apply()
         select(c)
     }
 
