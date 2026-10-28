@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 16:9 launcher banner: aurora gradient with a soft horizon arc. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="320dp" android:height="180dp" />
+            <gradient android:angle="45" android:startColor="#FF0B1D3A"
+                android:centerColor="#FF1C6E7A" android:endColor="#FF6B4BA8" />
+        </shape>
+    </item>
+    <item android:top="110dp" android:left="-60dp" android:right="-60dp" android:bottom="-200dp">
+        <shape android:shape="oval">
+            <solid android:color="#33FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

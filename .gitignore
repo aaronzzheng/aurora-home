@@ -1,0 +1,23 @@
+# Build output
+build/
+.gradle/
+*.apk
+*.idsig
+
+# Machine-specific
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Signing: never publish your key or its passwords
+*.keystore
+*.jks
+keystore.properties
+
+# Apple's macOS wallpapers are copyrighted: keep them local (the Aurora look falls back to NASA photos)
+res/drawable-nodpi/wp_*.webp
+
+# Screenshots and scratch images from development
+/*.png
+/*.jpg

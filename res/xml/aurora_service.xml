@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only what we use: focused-field text for typing from the phone, and window
+     events. Key filtering is allowed but only switched on (in code) while the sleep
+     warning or timer alarm is showing; left on, it stops held buttons repeating. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeViewFocused|typeViewClicked|typeViewScrolled"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canRequestFilterKeyEvents="true"
+    android:notificationTimeout="300" />

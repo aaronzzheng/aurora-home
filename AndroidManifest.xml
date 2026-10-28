@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Package, version and SDK levels live in build.gradle.kts. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Weather and the phone-remote server. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wi-Fi signal strength for TV info. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Watch-time stats; granted once over ADB (appops), stays on-device. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <!-- Morning screen: wake the TV at the time you pick. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Package visibility (Android 11+) for listing launchable apps. Not a permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="com.android.tv.action.VIEW_INPUTS" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="Aurora Home"
+        android:icon="@drawable/banner"
+        android:banner="@drawable/banner"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:largeHeap="false"
+        android:theme="@style/Aurora">
+
+        <activity
+            android:name=".HomeActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".GamesActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|uiMode" />
+
+        <activity
+            android:name=".MorningActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|uiMode" />
+
+        <receiver android:name=".Morning" android:exported="false" />
+
+        <service
+            android:name=".AuroraDream"
+            android:label="Aurora"
+            android:exported="true"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- Phone remote server, night mode overlay, sleep timer, typing into the TV.
+             An accessibility service so it keeps running while other apps are in front. -->
+        <service
+            android:name=".AuroraService"
+            android:label="Aurora Remote &amp; Night Mode"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/aurora_service" />
+        </service>
+    </application>
+</manifest>

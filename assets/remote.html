@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#07080d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Aurora Remote</title>
+<style>
+  /* ---------- the look: every theme sets these; Aurora is the default ---------- */
+  :root {
+    --bg: #07080d; --bg-art: radial-gradient(120% 60% at 0% 0%, #1b2350 0%, transparent 60%), radial-gradient(100% 50% at 100% 30%, #2e1f48 0%, transparent 55%), #07080d;
+    --fg: #f2f4f8; --dim: rgba(242,244,248,.58); --faint: rgba(255,255,255,.07);
+    --card: rgba(255,255,255,.06); --edge: rgba(255,255,255,.13); --radius: 22px; --btn-radius: 16px;
+    --btn: rgba(255,255,255,.07); --btn-fg: var(--fg); --btn-press: rgba(255,255,255,.2);
+    --primary: #f2f4f8; --primary-fg: #0b0d14; --accent: #9fc2ff; --warn: #ffb36b;
+    --pad: radial-gradient(circle at 50% 35%, rgba(255,255,255,.14), rgba(255,255,255,.04) 70%);
+    --pad-edge: rgba(255,255,255,.16); --ok: rgba(255,255,255,.16); --ok-fg: var(--fg); --arrow: var(--fg);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    --title-font: var(--font); --title-weight: 200; --cap-font: var(--font);
+    --shadow: 0 10px 30px rgba(0,0,0,.35); --blur: blur(20px);
+  }
+  body[data-theme="classic"] {
+    --bg: #008080; --bg-art: #008080; --fg: #000; --dim: #404040; --faint: #c0c0c0;
+    --card: #c0c0c0; --edge: transparent; --radius: 0; --btn-radius: 0;
+    --btn: #c0c0c0; --btn-fg: #000; --btn-press: #c0c0c0; --primary: #c0c0c0; --primary-fg: #000;
+    --accent: #000080; --warn: #800000;
+    --pad: #c0c0c0; --pad-edge: transparent; --ok: #c0c0c0; --ok-fg: #000; --arrow: #000;
+    --font: "MS Sans Serif", Tahoma, "Segoe UI", Arial, sans-serif; --title-font: var(--font); --title-weight: 700;
+    --shadow: none; --blur: none;
+  }
+  body[data-theme="retro"] {
+    --bg: #3a2414; --bg-art: repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 46px), linear-gradient(180deg, #5c3a22, #2e1a0e);
+    --fg: #3a2414; --dim: #7a5a40; --card: linear-gradient(180deg, #f8f0dc, #e6d6b2); --edge: #b9a57e;
+    --btn: linear-gradient(180deg, #fbf4e2, #e2d3b0); --btn-fg: #3a2414; --btn-press: #d8c69e;
+    --primary: #c4552a; --primary-fg: #fff6e6; --accent: #e2873a; --warn: #c4552a;
+    --pad: radial-gradient(circle at 45% 35%, #6a645a, #2a2620 75%); --pad-edge: #1a1612; --ok: radial-gradient(circle at 40% 35%, #f2efe8, #8e897e); --ok-fg: #2a2620; --arrow: #f6ebd0;
+    --title-font: Georgia, "Times New Roman", serif; --title-weight: 700; --cap-font: "Arial Narrow", "Roboto Condensed", sans-serif;
+    --radius: 14px; --btn-radius: 10px; --shadow: 0 6px 0 rgba(0,0,0,.25), 0 14px 24px rgba(0,0,0,.35); --blur: none;
+  }
+  body[data-theme="art"] {
+    --bg: #3a1014; --bg-art: radial-gradient(90% 60% at 50% 10%, #7a2a2e 0%, #3a1014 60%, #1e0709 100%);
+    --fg: #f3e7cf; --dim: rgba(243,231,207,.65); --card: rgba(26,20,18,.82); --edge: #b8893a;
+    --btn: rgba(243,231,207,.08); --btn-fg: #f3e7cf; --btn-press: rgba(226,194,122,.3);
+    --primary: #e2c27a; --primary-fg: #2a1408; --accent: #e2c27a; --warn: #e2c27a;
+    --pad: radial-gradient(circle at 50% 35%, #2a201a, #120c0a 75%); --pad-edge: #b8893a; --ok: radial-gradient(circle at 40% 35%, #f2d48a, #b8893a); --ok-fg: #2a1408; --arrow: #e2c27a;
+    --font: Georgia, "Times New Roman", serif; --title-font: Georgia, serif; --title-weight: 400;
+    --radius: 6px; --btn-radius: 4px; --blur: none;
+  }
+  body[data-theme="space"] {
+    --bg: #16181b; --bg-art: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2a2d31, #121417);
+    --fg: #e8eae6; --dim: rgba(232,234,230,.55); --card: linear-gradient(180deg, #23272b, #16191c); --edge: #5a6066;
+    --btn: linear-gradient(180deg, #2c3136, #1a1d20); --btn-fg: #e8eae6; --btn-press: #3a3f45;
+    --primary: #ffc56a; --primary-fg: #1e140a; --accent: #ffc56a; --warn: #ffa24a;
+    --pad: radial-gradient(circle at 50% 35%, #2c3136, #0c0e10 75%); --pad-edge: #8a9096; --ok: radial-gradient(circle at 40% 35%, #ffd890, #e0952e); --ok-fg: #1e140a; --arrow: #ffc56a;
+    --font: "SF Mono", Menlo, "Roboto Mono", monospace; --title-font: "Arial Narrow", "Roboto Condensed", sans-serif; --title-weight: 700; --cap-font: var(--font);
+    --radius: 10px; --btn-radius: 8px; --blur: none;
+  }
+  body[data-theme="cozy"] {
+    --bg: #140a04; --bg-art: radial-gradient(70% 45% at 50% 100%, rgba(255,140,40,.35), transparent 70%), radial-gradient(60% 40% at 50% 0%, #3a2414, #140a04);
+    --fg: #f6e6cc; --dim: rgba(246,230,204,.62); --card: rgba(30,16,8,.78); --edge: rgba(255,176,74,.35);
+    --btn: linear-gradient(180deg, #6e4423, #432713); --btn-fg: #f6e6cc; --btn-press: #8a5a34;
+    --primary: #ffb04a; --primary-fg: #2a1406; --accent: #ffb04a; --warn: #ffb04a;
+    --pad: radial-gradient(circle at 50% 35%, #6e4423, #2a1a10 75%); --pad-edge: #b07840; --ok: radial-gradient(circle at 40% 35%, #f0c070, #b07a30); --ok-fg: #2a1406; --arrow: #f6e6cc;
+    --font: Georgia, serif; --title-font: Georgia, serif; --title-weight: 700;
+    --radius: 16px; --btn-radius: 12px; --blur: none;
+  }
+  body[data-theme="minimal"] {
+    --bg: #f1ede4; --bg-art: #f1ede4; --fg: #161616; --dim: rgba(22,22,22,.55); --card: transparent; --edge: rgba(22,22,22,.18);
+    --btn: transparent; --btn-fg: #161616; --btn-press: rgba(22,22,22,.08); --primary: #161616; --primary-fg: #f1ede4; --accent: #b4361e; --warn: #b4361e;
+    --pad: transparent; --pad-edge: #161616; --ok: #161616; --ok-fg: #f1ede4; --arrow: #161616;
+    --title-font: Georgia, serif; --title-weight: 400; --radius: 0; --btn-radius: 0; --shadow: none; --blur: none;
+  }
+  body[data-theme="minimal"].night {
+    --bg: #0e0e0e; --bg-art: #0e0e0e; --fg: #edeae4; --dim: rgba(237,234,228,.55); --edge: rgba(237,234,228,.2);
+    --btn-fg: #edeae4; --btn-press: rgba(237,234,228,.1); --primary: #edeae4; --primary-fg: #0e0e0e; --pad-edge: #edeae4; --ok: #edeae4; --ok-fg: #0e0e0e; --arrow: #edeae4;
+  }
+  body[data-theme="cs"] {
+    --bg: #020a04; --bg-art: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px), radial-gradient(80% 60% at 50% 40%, #082414, #020a04);
+    --fg: #b4ffc8; --dim: #22a048; --card: rgba(2,10,4,.9); --edge: #22a048;
+    --btn: transparent; --btn-fg: #46f07a; --btn-press: rgba(70,240,122,.18); --primary: #46f07a; --primary-fg: #02140a; --accent: #46f07a; --warn: #b4ffc8;
+    --pad: transparent; --pad-edge: #46f07a; --ok: #46f07a; --ok-fg: #02140a; --arrow: #46f07a;
+    --font: "SF Mono", Menlo, "Roboto Mono", "Courier New", monospace; --title-font: var(--font); --title-weight: 400; --cap-font: var(--font);
+    --radius: 0; --btn-radius: 0; --shadow: 0 0 18px rgba(70,240,122,.18); --blur: none;
+  }
+  body[data-theme="light"] {
+    --bg: #ece9e4; --bg-art: radial-gradient(90% 60% at 80% 0%, #ffffff, #e9e5de 70%);
+    --fg: #1c1c1e; --dim: rgba(28,28,30,.55); --card: rgba(255,255,255,.82); --edge: rgba(0,0,0,.08);
+    --btn: #fff; --btn-fg: #1c1c1e; --btn-press: #e8e6e2; --primary: #1c1c1e; --primary-fg: #fff; --accent: #2f6db8; --warn: #d8573a;
+    --pad: radial-gradient(circle at 50% 30%, #ffffff, #ecebe8 75%); --pad-edge: rgba(0,0,0,.1); --ok: #1c1c1e; --ok-fg: #fff; --arrow: #1c1c1e;
+    --title-weight: 300; --shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 var(--font); }
+  body { padding: max(16px, env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));
+    background: var(--bg-art); background-attachment: fixed; min-height: 100vh; max-width: 560px; margin: 0 auto;
+    transition: background .4s, color .4s; }
+  h1 { font: var(--title-weight) 34px/1.1 var(--title-font); letter-spacing: -.01em; margin: 6px 0 2px; }
+  .status { color: var(--dim); font-size: 13px; min-height: 18px; }
+  .cap { text-transform: uppercase; letter-spacing: .22em; font: 600 11px var(--cap-font); color: var(--dim); margin: 26px 4px 10px; }
+  .card { background: var(--card); border: 1px solid var(--edge); border-radius: var(--radius); padding: 14px;
+    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: var(--shadow); }
+  button { font: inherit; color: var(--btn-fg); background: var(--btn); border: 1px solid var(--edge);
+    border-radius: var(--btn-radius); padding: 14px 10px; min-height: 52px; cursor: pointer; transition: transform .08s, background .15s;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+  button:active, button.pressed { transform: scale(.96); background: var(--btn-press); }
+  button.primary, button.on { background: var(--primary); color: var(--primary-fg); border-color: transparent; font-weight: 600; }
+  .grid { display: grid; gap: 10px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g6 { grid-template-columns: repeat(3, 1fr); }
+  @media (min-width: 420px) { .g6 { grid-template-columns: repeat(6, 1fr); } }
+  .big { font-size: 22px; }
+  input, select { font: inherit; color: var(--fg); background: rgba(0,0,0,.2); border: 1px solid var(--edge);
+    border-radius: var(--btn-radius); padding: 14px; width: 100%; min-height: 52px; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; gap: 10px; align-items: center; } .row > * { flex: 1; }
+  .apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (min-width: 420px) { .apps { grid-template-columns: repeat(3, 1fr); } }
+  .app { padding: 0; overflow: hidden; aspect-ratio: 16/9; position: relative; min-height: 0; background: #111; }
+  .app img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .app span { position: absolute; inset: auto 0 0 0; font-size: 11px; padding: 4px 6px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.7)); text-align: left; }
+  .bar { height: 8px; border-radius: 8px; background: var(--accent); }
+  .stat { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; margin: 10px 2px; }
+  .stat .bar { grid-column: 1 / -1; }
+  .muted { color: var(--dim); font-size: 13px; }
+  .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+    background: rgba(20,22,30,.95); color: #f2f4f8; border: 1px solid rgba(255,255,255,.15); padding: 12px 18px; border-radius: 999px; font-size: 14px;
+    opacity: 0; transition: .25s; pointer-events: none; max-width: 90vw; text-align: center; z-index: 9; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  input[type=range] { padding: 0; min-height: 36px; background: none; border: 0; accent-color: var(--accent); }
+  .code { font-size: 32px; letter-spacing: .5em; text-align: center; }
+  .hint { border: 1px solid var(--accent); color: var(--fg); background: var(--card); border-radius: var(--radius); padding: 12px 14px; font-size: 13px; margin-top: 12px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- the remote ---------- */
+  .remote { display: grid; gap: 16px; padding: 18px 16px 20px; }
+  .top { display: grid; grid-template-columns: auto 1fr 1fr; gap: 10px; }
+  .power { width: 52px; padding: 0; font-size: 20px; color: var(--warn); }
+  .pad { position: relative; width: min(78vw, 290px); aspect-ratio: 1; margin: 4px auto; border-radius: 50%;
+    background: var(--pad); border: 2px solid var(--pad-edge); box-shadow: var(--shadow); touch-action: none; }
+  .ic { width: 1.15em; height: 1.15em; vertical-align: -0.2em; fill: currentColor; }
+  .pad .ic { width: 30px; height: 30px; }
+  .media .ic { width: 22px; height: 22px; }
+  .power .ic { width: 22px; height: 22px; }
+  .pad button { position: absolute; border: 0; background: transparent; color: var(--arrow); min-height: 0; padding: 0; font-size: 26px; border-radius: 50%; }
+  .pad button:active, .pad button.pressed { background: var(--btn-press); transform: none; }
+  .pad .up { left: 33%; top: 3%; width: 34%; height: 30%; }
+  .pad .down { left: 33%; bottom: 3%; width: 34%; height: 30%; }
+  .pad .left { left: 3%; top: 33%; width: 30%; height: 34%; }
+  .pad .right { right: 3%; top: 33%; width: 30%; height: 34%; }
+  .pad .ok { left: 31%; top: 31%; width: 38%; height: 38%; background: var(--ok); color: var(--ok-fg); font-weight: 700; font-size: 18px;
+    box-shadow: 0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25); }
+  .pad .ok:active, .pad .ok.pressed { transform: scale(.95); background: var(--ok); filter: brightness(.9); }
+  .lower { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: stretch; }
+  .rocker { grid-row: span 2; display: grid; grid-template-rows: 1fr 1fr; width: 64px; border: 1px solid var(--edge); border-radius: calc(var(--btn-radius) * 2); overflow: hidden; background: var(--btn); }
+  .rocker button { border: 0; border-radius: 0; background: transparent; font-size: 26px; min-height: 0; }
+  .media { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .media button { padding: 10px 0; min-height: 46px; }
+
+  /* Windows 95: four-line bevels, a title bar on every card */
+  body[data-theme="classic"] button, body[data-theme="classic"] .rocker {
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; border: 0; }
+  body[data-theme="classic"] button:active, body[data-theme="classic"] button.pressed {
+    box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; transform: none; }
+  body[data-theme="classic"] button.on, body[data-theme="classic"] button.primary { background: #c0c0c0; color: #000; font-weight: 700; outline: 1px dotted #000; outline-offset: -5px; }
+  body[data-theme="classic"] .card { box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff; padding: 6px 10px 12px; }
+  body[data-theme="classic"] .cap { background: #000080; color: #fff; letter-spacing: 0; text-transform: none; font: 700 13px var(--font); margin: 18px 0 0; padding: 3px 6px; }
+  body[data-theme="classic"] .cap + .card, body[data-theme="classic"] .cap + .apps { margin-top: 0; }
+  body[data-theme="classic"] .pad { box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; }
+  body[data-theme="classic"] .pad button { box-shadow: none; }
+  body[data-theme="classic"] .pad .ok { box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; }
+  body[data-theme="classic"] h1 { color: #fff; }
+  body[data-theme="classic"] .status { color: #e0f0f0; }
+  body[data-theme="classic"] input, body[data-theme="classic"] select { background: #fff; border: 0; box-shadow: inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a; }
+  body[data-theme="classic"] .muted { color: #303030; }
+  /* Retro: piano-key buttons with a lip */
+  body[data-theme="retro"] button { box-shadow: 0 3px 0 #b9a57e, 0 4px 6px rgba(0,0,0,.25); border-color: #cdbb94; }
+  body[data-theme="retro"] button:active, body[data-theme="retro"] button.pressed { box-shadow: 0 1px 0 #b9a57e; transform: translateY(2px); }
+  body[data-theme="retro"] h1, body[data-theme="retro"] .status, body[data-theme="retro"] > .cap { color: #f6ebd0; }
+  body[data-theme="retro"] .cap { color: #f2c98a; }
+  body[data-theme="retro"] .pad button:not(.ok) { box-shadow: none; }
+  /* Space and the terminal: glowing edges */
+  body[data-theme="space"] button { box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 2px 4px rgba(0,0,0,.4); }
+  body[data-theme="space"] button.on, body[data-theme="space"] button.primary { box-shadow: 0 0 14px rgba(255,197,106,.45); }
+  body[data-theme="cs"] button { text-transform: lowercase; }
+  body[data-theme="cs"] button.on, body[data-theme="cs"] button.primary, body[data-theme="cs"] button:active { box-shadow: 0 0 14px rgba(70,240,122,.5); }
+  body[data-theme="cs"] h1::before { content: "root@aurora:~# "; font-size: 15px; color: var(--dim); vertical-align: middle; }
+  body[data-theme="cs"] .pad { box-shadow: 0 0 24px rgba(70,240,122,.25), inset 0 0 24px rgba(70,240,122,.12); }
+  body[data-theme="light"] input, body[data-theme="light"] select { background: #fff; }
+  body[data-theme="retro"] input, body[data-theme="retro"] select { background: #fffaf0; }
+  /* Minimal: hairlines only */
+  body[data-theme="minimal"] .card { border-width: 1px 0 0 0; padding: 14px 0; }
+  body[data-theme="minimal"] .pad { border-width: 1px; }
+  body[data-theme="minimal"] h1 { font-style: italic; }
+</style>
+</head>
+<body>
+  <h1 id="title">Aurora</h1>
+  <div class="status" id="status">Connecting…</div>
+
+  <!-- pairing -->
+  <section id="pair" hidden>
+    <div class="cap">Pair this phone</div>
+    <div class="card grid">
+      <div class="muted">Tap below and a 6-digit code will appear at the top of the TV.</div>
+      <button class="primary" id="askCode">Show code on TV</button>
+      <input id="code" class="code" inputmode="numeric" maxlength="7" placeholder="······" autocomplete="one-time-code">
+      <input id="pin" class="code" inputmode="numeric" type="password" maxlength="4" placeholder="PIN" hidden>
+      <div class="muted" id="pinNote" hidden>This TV has a family PIN. Enter it to pair.</div>
+      <button id="sendCode">Pair</button>
+    </div>
+  </section>
+
+  <main id="app" hidden>
+    <div class="cap">Remote</div>
+    <div class="card remote">
+      <div class="top">
+        <button class="power" id="powerOff" aria-label="Turn off TV"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8M7.2 6.8a7 7 0 1 0 9.6 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button id="inputs">Inputs</button>
+        <button data-key="menu">Options</button>
+      </div>
+
+      <div class="pad" id="pad">
+        <button class="up" data-arrow="up" aria-label="Up"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5l8 11H4z"/></svg></button>
+        <button class="left" data-arrow="left" aria-label="Left"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l11-8v16z"/></svg></button>
+        <button class="ok" data-arrow="ok" aria-label="OK">OK</button>
+        <button class="right" data-arrow="right" aria-label="Right"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12L8 4v16z"/></svg></button>
+        <button class="down" data-arrow="down" aria-label="Down"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19L4 8h16z"/></svg></button>
+      </div>
+
+      <div class="lower">
+        <button data-key="back"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Back</button>
+        <button data-key="home"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5L12 4.5l8 7V20h-5.5v-5.5h-5V20H4z"/></svg> Home</button>
+        <button data-key="mute">Mute</button>
+        <div class="rocker">
+          <button data-key="volup" aria-label="Volume up">+</button>
+          <button data-key="voldown" aria-label="Volume down">−</button>
+        </div>
+        <div class="media">
+          <button data-key="rew" aria-label="Rewind"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6v12L3 12zM21 6v12l-8-6z"/></svg></button>
+          <button data-key="prev" aria-label="Previous"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h2.4v12H5zM9 12l10-6.5v13z"/></svg></button>
+          <button data-key="playpause" class="big" aria-label="Play or pause"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5v13L12 12zM14 6h2.6v12H14zM18.4 6H21v12h-2.6z"/></svg></button>
+          <button data-key="next" aria-label="Next"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.6 6H19v12h-2.4zM5 5.5v13L15 12z"/></svg></button>
+          <button data-key="ff" aria-label="Fast forward"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6v12l8-6zM13 6v12l8-6z"/></svg></button>
+        </div>
+      </div>
+      <div class="hint" id="stuckHint" hidden>This app doesn't let the phone move the selection. On the TV, open
+        <b>Settings → Phone remote → Arrows in every app</b> and the arrows will work everywhere.</div>
+      <div class="muted" style="text-align:center">Hold an arrow or volume to repeat · swipe on the pad to move</div>
+    </div>
+
+    <div class="cap">Type &amp; search</div>
+    <div class="card grid">
+      <input id="text" placeholder="Type here…" autocomplete="off" autocapitalize="off" enterkeyhint="send">
+      <div class="row">
+        <button id="typeBtn">Type on TV</button>
+        <button id="searchYt">Search YouTube</button>
+      </div>
+      <div class="muted">"Type on TV" fills the text box that's selected on screen (sign-ins, Wi-Fi, most app search boxes). Netflix and YouTube use their own on-screen keyboards, so for YouTube use "Search YouTube".</div>
+    </div>
+
+    <div class="cap">Apps</div>
+    <div class="apps" id="apps"></div>
+
+    <div class="cap">Timer</div>
+    <div class="card grid">
+      <div class="big" id="timerShow" style="text-align:center;font-weight:200;font-size:40px">Off</div>
+      <div class="grid g4" id="timerPresets">
+        <button data-tmin="1">1m</button><button data-tmin="3">3m</button><button data-tmin="5">5m</button><button data-tmin="10">10m</button>
+        <button data-tmin="15">15m</button><button data-tmin="30">30m</button><button data-tmin="45">45m</button><button data-tmin="60">1h</button>
+      </div>
+      <div class="row"><input id="tmin" inputmode="decimal" placeholder="Minutes"><button id="tStart" style="flex:0 0 auto">Start</button></div>
+      <div class="row"><button id="swBtn">Stopwatch</button><button id="tStop">Stop</button></div>
+      <div class="muted">Shows in the corner of the TV over anything. When it's done it beeps until someone presses a button.</div>
+    </div>
+
+    <div class="cap">Sleep timer</div>
+    <div class="card grid">
+      <div class="grid g6" id="sleep">
+        <button data-min="0">Off</button><button data-min="15">15m</button><button data-min="30">30m</button>
+        <button data-min="60">1h</button><button data-min="90">1.5h</button><button data-min="120">2h</button>
+      </div>
+      <div class="muted" id="sleepNote"></div>
+    </div>
+
+    <div class="cap">Night mode</div>
+    <div class="card grid">
+      <div class="switch"><span>Warm &amp; dim the screen at night</span><button id="nightOn" style="min-width:76px">On</button></div>
+      <div class="row">
+        <label class="muted">From<select id="nStart"></select></label>
+        <label class="muted">Until<select id="nEnd"></select></label>
+      </div>
+      <label class="muted">Strength <span id="nLevelV"></span>
+        <input type="range" id="nLevel" min="5" max="70" step="5"></label>
+      <button id="nightSave">Save night mode</button>
+      <div class="muted" id="nightNote"></div>
+    </div>
+
+    <div class="cap">TV behavior</div>
+    <div class="card grid">
+      <div class="switch"><span>Open the last app when the TV turns on</span><button data-hab="resume" style="min-width:76px">On</button></div>
+      <div class="switch"><span>Remember the volume for each app</span><button data-hab="pervol" style="min-width:76px">On</button></div>
+      <div class="switch"><span>Turn on at a safe volume</span><button data-hab="safe" style="min-width:76px">On</button></div>
+      <div class="switch"><span>Interface sounds</span><button data-hab="sounds" style="min-width:76px">On</button></div>
+      <label class="muted">Safe volume: <span id="safeV"></span>
+        <input type="range" id="safePct" min="5" max="80" step="5"></label>
+    </div>
+
+    <div class="cap">Screensaver</div>
+    <div class="card grid">
+      <div class="row"><button id="ssWall">Wallpapers</button><button id="ssArt">Famous paintings</button></div>
+    </div>
+
+    <div class="cap">Watch time · last 7 days</div>
+    <div class="card" id="stats"></div>
+
+    <div class="cap">Backup</div>
+    <div class="card grid">
+      <div class="muted">Save every TV setting to this phone, and put them back after a reset or on a new TV. The TV asks before restoring.</div>
+      <div class="row"><button id="backupBtn">Download backup</button><button id="restoreBtn">Restore from file</button></div>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+    </div>
+
+    <div class="cap">Weather location</div>
+    <div class="card grid">
+      <div class="row"><input id="place" placeholder="City or ZIP"><button id="placeBtn" style="flex:0 0 auto">Set</button></div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let token = null;
+  try { token = localStorage.getItem("aurora_token"); } catch (e) {}
+  let state = null, nightOn = true;
+
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  async function api(path, params = {}, method = "POST") {
+    const q = new URLSearchParams(params).toString();
+    const r = await fetch(path + (q ? "?" + q : ""), { method, headers: token ? { "X-Token": token } : {} });
+    if (r.status === 401) { setToken(null); throw new Error("Pair this phone again"); }
+    return r.json();
+  }
+
+  function setToken(t) {
+    token = t;
+    try { t ? localStorage.setItem("aurora_token", t) : localStorage.removeItem("aurora_token"); } catch (e) {}
+    $("pair").hidden = !!t; $("app").hidden = !t;
+    if (t) load(); else $("status").textContent = "Not paired";
+  }
+
+  // ---------- the TV's look
+  const TITLES = { aurora: "Aurora", classic: "Aurora Remote", retro: "Aurora", art: "Aurora", space: "AURORA · REMOTE",
+                   cozy: "Aurora", minimal: "Remote", cs: "remote", light: "Aurora" };
+  const COLORS = { aurora: "#07080d", classic: "#008080", retro: "#3a2414", art: "#3a1014", space: "#16181b", cozy: "#140a04",
+                   minimal: "#f1ede4", cs: "#020a04", light: "#ece9e4" };
+  function applyTheme(id) {
+    if (!id) return;
+    const theme = TITLES[id] ? id : "aurora";
+    try { localStorage.setItem("aurora_theme", theme); } catch (e) {}
+    document.body.dataset.theme = theme;
+    const h = new Date().getHours();
+    document.body.classList.toggle("night", h < 7 || h >= 19);
+    $("title").textContent = TITLES[theme];
+    document.querySelector('meta[name="theme-color"]').content =
+      theme === "minimal" && document.body.classList.contains("night") ? "#0e0e0e" : COLORS[theme];
+  }
+  try { applyTheme(localStorage.getItem("aurora_theme")); } catch (e) {}
+
+  // ---------- pairing
+  $("askCode").onclick = async () => {
+    try {
+      const r = await api("/api/pair");
+      if (!r.ok) { toast(r.error); return; }
+      showPin(r.pin); toast("Code is on the TV"); $("code").focus();
+    } catch (e) { toast(e.message); }
+  };
+  const showPin = need => { $("pin").hidden = !need; $("pinNote").hidden = !need; };
+  $("sendCode").onclick = async () => {
+    try {
+      const r = await api("/api/pair", { code: $("code").value.replace(/\D/g, ""), pin: $("pin").value });
+      if (!r.ok) showPin(r.pin);
+      if (r.ok) { setToken(r.token); toast("Paired"); } else toast(r.error);
+    } catch (e) { toast(e.message); }
+  };
+
+  // ---------- remote
+  let hintShown = false;
+  const sendKey = k => {
+    if (navigator.vibrate) navigator.vibrate(8);
+    return api("/api/key", { k }).then(r => {
+      if (r.stuck && !hintShown && !(state && state.full)) { hintShown = true; $("stuckHint").hidden = false; }
+    }).catch(e => toast(e.message));
+  };
+
+  /** Press now; if held, repeat after a short pause, steadily (like the TV remote, but gentler). */
+  function holdable(b, k, every) {
+    let hold = null, wait = null;
+    const stop = () => { clearTimeout(wait); clearInterval(hold); wait = hold = null; b.classList.remove("pressed"); };
+    b.addEventListener("pointerdown", e => {
+      e.preventDefault(); stop(); b.classList.add("pressed"); sendKey(k);
+      wait = setTimeout(() => { hold = setInterval(() => sendKey(k), every); }, 420);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(t => b.addEventListener(t, stop));
+    b.addEventListener("contextmenu", e => e.preventDefault());
+  }
+  document.querySelectorAll("[data-key]").forEach(b => {
+    const k = b.dataset.key;
+    if (k === "volup" || k === "voldown") holdable(b, k, 200);
+    else b.onclick = () => sendKey(k);
+  });
+  document.querySelectorAll("[data-arrow]").forEach(b => {
+    const k = b.dataset.arrow;
+    if (k === "ok") b.onclick = () => sendKey("ok");
+    else holdable(b, k, 180);
+  });
+
+  // swipe across the pad (outside the buttons' own presses) to move
+  (() => {
+    const pad = $("pad"); let sx = 0, sy = 0, swiping = false;
+    pad.addEventListener("touchstart", e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; swiping = true; }, { passive: true });
+    pad.addEventListener("touchmove", e => {
+      if (!swiping) return;
+      const t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 44) return;
+      sendKey(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+      sx = t.clientX; sy = t.clientY;
+    }, { passive: true });
+    pad.addEventListener("touchend", () => { swiping = false; });
+  })();
+
+  $("powerOff").onclick = async () => {
+    if (!confirm("Turn off the TV?")) return;
+    try { await api("/api/off"); toast("TV is turning off"); } catch (e) { toast(e.message); }
+  };
+  $("inputs").onclick = () => api("/api/inputs").then(r => r.ok || toast(r.error));
+
+  // ---------- type & search
+  async function typeText() {
+    const s = $("text").value;
+    const r = await api("/api/type", { s, enter: 1 });
+    toast(r.ok ? "Typed" : r.error);
+  }
+  $("typeBtn").onclick = typeText;
+  $("text").onkeydown = e => { if (e.key === "Enter") typeText(); };
+  $("searchYt").onclick = () => api("/api/search", { q: $("text").value }).then(r => toast(r.ok ? "Searching YouTube…" : r.error));
+
+  // ---------- sleep
+  document.querySelectorAll("[data-min]").forEach(b => b.onclick = async () => {
+    const r = await api("/api/sleep", { min: b.dataset.min });
+    renderSleep(r.sleep); toast(r.sleep ? "TV sleeps in " + fmtMin(r.sleep) : "Sleep timer off");
+  });
+  function fmtMin(m) { return m >= 60 ? Math.floor(m / 60) + "h " + (m % 60 ? (m % 60) + "m" : "") : m + "m"; }
+  function renderSleep(m) {
+    $("sleepNote").textContent = m ? "TV goes to sleep in " + fmtMin(m) + ". It warns you a minute before." : "Off";
+    document.querySelectorAll("[data-min]").forEach(b => b.classList.toggle("on", !m && b.dataset.min === "0"));
+  }
+
+  // ---------- night
+  const hours = [...Array(24).keys()];
+  const label = h => (h % 12 || 12) + (h < 12 ? " am" : " pm");
+  for (const id of ["nStart", "nEnd"]) $(id).innerHTML = hours.map(h => `<option value="${h}">${label(h)}</option>`).join("");
+  $("nLevel").oninput = () => $("nLevelV").textContent = $("nLevel").value + "%";
+  $("nightOn").onclick = () => { nightOn = !nightOn; renderNightBtn(); };
+  function renderNightBtn() { $("nightOn").textContent = nightOn ? "On" : "Off"; $("nightOn").classList.toggle("on", nightOn); }
+  $("nightSave").onclick = async () => {
+    const r = await api("/api/night", { on: nightOn ? 1 : 0, start: $("nStart").value, end: $("nEnd").value, level: $("nLevel").value });
+    toast(r.active ? "Night mode on now" : "Saved"); load();
+  };
+
+  // ---------- timer
+  let tLeft = -1, sw = -1, ringing = false, tAt = Date.now();
+  function clock(s) { const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); }
+  function renderTimer() {
+    const gone = Math.floor((Date.now() - tAt) / 1000);
+    $("timerShow").textContent = ringing ? "Time's up!" : tLeft >= 0 ? clock(Math.max(0, tLeft - gone))
+      : sw >= 0 ? "Stopwatch " + clock(sw + gone) : "Off";
+  }
+  setInterval(renderTimer, 500);
+  async function startTimer(sec) {
+    const r = await api("/api/timer", { sec: Math.round(sec) });
+    tLeft = r.timer; sw = -1; ringing = false; tAt = Date.now(); renderTimer();
+    toast("Timer set for " + clock(Math.round(sec)));
+  }
+  document.querySelectorAll("[data-tmin]").forEach(b => b.onclick = () => startTimer(b.dataset.tmin * 60));
+  $("tStart").onclick = () => { const m = parseFloat($("tmin").value); if (m > 0) startTimer(m * 60); else toast("Enter minutes"); };
+  $("swBtn").onclick = async () => { await api("/api/stopwatch"); sw = 0; tLeft = -1; ringing = false; tAt = Date.now(); renderTimer(); };
+  $("tStop").onclick = async () => { await api("/api/timer", { sec: 0 }); tLeft = -1; sw = -1; ringing = false; renderTimer(); };
+
+  // ---------- TV behavior
+  let habits = {};
+  function renderHabits() {
+    document.querySelectorAll("[data-hab]").forEach(b => {
+      const on = !!habits[b.dataset.hab];
+      b.textContent = on ? "On" : "Off"; b.classList.toggle("on", on);
+    });
+    if (habits.safepct) { $("safePct").value = habits.safepct; $("safeV").textContent = habits.safepct + "%"; }
+  }
+  document.querySelectorAll("[data-hab]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.hab; habits[k] = !habits[k]; renderHabits();
+    await api("/api/habits", { [k]: habits[k] ? 1 : 0 });
+  });
+  $("safePct").oninput = () => $("safeV").textContent = $("safePct").value + "%";
+  $("safePct").onchange = () => { habits.safepct = +$("safePct").value; api("/api/habits", { safepct: habits.safepct }); };
+
+  // ---------- screensaver
+  function renderArt(on) { $("ssArt").classList.toggle("on", on); $("ssWall").classList.toggle("on", !on); }
+  $("ssWall").onclick = () => api("/api/art", { on: 0 }).then(() => { renderArt(false); toast("Screensaver: wallpapers"); });
+  $("ssArt").onclick = () => api("/api/art", { on: 1 }).then(() => { renderArt(true); toast("Screensaver: famous paintings"); });
+
+  // ---------- backup
+  $("backupBtn").onclick = async () => {
+    try {
+      const r = await fetch("/api/backup", { headers: { "X-Token": token } });
+      if (r.status === 401) { setToken(null); throw new Error("Pair this phone again"); }
+      const text = await r.text();
+      const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      a.download = name ? name[1] : "aurora-backup.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast("Backup saved to this phone");
+    } catch (e) { toast(e.message); }
+  };
+  $("restoreBtn").onclick = () => $("restoreFile").click();
+  $("restoreFile").onchange = async () => {
+    const f = $("restoreFile").files[0];
+    $("restoreFile").value = "";
+    if (!f) return;
+    try {
+      const r = await fetch("/api/restore", { method: "POST", headers: { "X-Token": token, "Content-Type": "application/json" }, body: await f.text() });
+      if (r.status === 401) { setToken(null); throw new Error("Pair this phone again"); }
+      const j = await r.json();
+      toast(j.ok ? j.message : j.error);
+    } catch (e) { toast(e.message); }
+  };
+
+  // ---------- weather
+  $("placeBtn").onclick = async () => {
+    const r = await api("/api/location", { q: $("place").value });
+    toast(r.ok ? "Weather set to " + r.place : r.error);
+  };
+
+  // ---------- state
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function fmtMs(ms) { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; }
+
+  async function load(manual) {
+    try {
+      state = await api("/api/state", {}, "GET");
+    } catch (e) { $("status").textContent = e.message; return; }
+    applyTheme(state.theme);
+    if (state.full) $("stuckHint").hidden = true;
+    const bits = [];
+    if (state.sleep) bits.push("Sleep in " + fmtMin(state.sleep));
+    if (state.timer >= 0) bits.push("Timer " + clock(state.timer));
+    if (state.night.active) bits.push("Night mode on");
+    if (state.place) bits.push(state.place);
+    $("status").textContent = bits.join(" · ") || "Connected";
+
+    $("apps").innerHTML = state.apps.filter(a => !a.hidden).map(a =>
+      `<button class="app" data-pkg="${esc(a.pkg)}" aria-label="${esc(a.label)}">
+         <img loading="lazy" alt="" src="/api/icon?pkg=${encodeURIComponent(a.pkg)}&t=${encodeURIComponent(token)}">
+         <span>${esc(a.label)}</span></button>`).join("");
+    $("apps").querySelectorAll("[data-pkg]").forEach(b => b.onclick = () =>
+      api("/api/launch", { pkg: b.dataset.pkg }).then(r => toast(r.ok ? "Opening " + b.getAttribute("aria-label") : r.error)));
+
+    renderSleep(state.sleep);
+    tLeft = state.timer; sw = state.stopwatch; ringing = state.ringing; tAt = Date.now(); renderTimer();
+    renderArt(state.art);
+    habits = state.habits || {}; renderHabits();
+    nightOn = state.night.on; renderNightBtn();
+    $("nStart").value = state.night.start; $("nEnd").value = state.night.end;
+    $("nLevel").value = state.night.level; $("nLevelV").textContent = state.night.level + "%";
+    $("nightNote").textContent = state.night.active ? "Active right now." : "";
+    $("place").placeholder = state.place ? state.place + " (change…)" : "City or ZIP";
+
+    if (!state.statsAllowed) {
+      $("stats").innerHTML = '<div class="muted">Usage access isn\'t granted on the TV.</div>';
+    } else if (!state.stats.length) {
+      $("stats").innerHTML = '<div class="muted">Nothing watched yet this week.</div>';
+    } else {
+      const max = state.stats[0].ms;
+      $("stats").innerHTML = `<div class="muted">${fmtMs(state.weekTotal)} in total</div>` + state.stats.slice(0, 8).map(s =>
+        `<div class="stat"><span>${esc(s.label)}</span><span class="muted">${fmtMs(s.ms)}</span>
+           <div class="bar" style="width:${Math.max(4, s.ms / max * 100)}%"></div></div>`).join("");
+    }
+    if (manual) toast("Updated");
+  }
+
+  setToken(token);
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const fromQr = hash.get("code");
+  if (fromQr) {
+    history.replaceState(null, "", location.pathname);
+    if (!token && hash.get("pin") === "1") {   // the TV has a PIN: fill in the code, ask for the PIN
+      $("code").value = fromQr; showPin(true); $("pin").focus();
+    } else if (!token) {
+      api("/api/pair", { code: fromQr }).then(r => r.ok ? (setToken(r.token), toast("Paired")) : toast(r.error)).catch(e => toast(e.message));
+    }
+  }
+  // stay in step with the TV: its look and timers
+  setInterval(() => { if (token && !document.hidden) load(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && token) load(); });
+})();
+</script>
+</body>
+</html>
