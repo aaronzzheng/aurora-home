@@ -54,21 +54,24 @@ object Sounds {
         prefs.edit().putBoolean("ui_sounds", on).apply()
     }
 
-    /** How loud the sounds are, as a percent of their full level; set in Settings. */
-    private val LEVELS = intArrayOf(25, 45, 70, 100)
-    private val LEVEL_NAMES = arrayOf("Whisper", "Quiet", "Medium", "Full")
+    /**
+     * How loud the sounds are, as a percent of their full level; set in Settings. Eight steps
+     * from barely there to as loud as the files go (the old top step is about 35 here).
+     */
+    private val LEVELS = intArrayOf(5, 10, 20, 35, 50, 65, 80, 100)
 
     @JvmStatic
     fun level(c: Context): Int {
         init(c)
-        return prefs.getInt("ui_sounds_level", 70)
+        return prefs.getInt("ui_sounds_level", 20)
     }
 
+    /** "▮▮▮▯▯▯▯▯" for the third step of eight. */
     @JvmStatic
     fun levelName(c: Context): String {
         val l = level(c)
         val i = LEVELS.indexOfFirst { it >= l }.let { if (it < 0) LEVELS.size - 1 else it }
-        return LEVEL_NAMES[i]
+        return "▮".repeat(i + 1) + "▯".repeat(LEVELS.size - i - 1)
     }
 
     /** Step to the next level (wrapping round) and play a sample at it. */
@@ -108,14 +111,14 @@ object Sounds {
         val now = SystemClock.uptimeMillis()
         if (now - lastClick < 45) return   // holding an arrow down shouldn't buzz
         lastClick = now
-        play(c, cur?.get(0) ?: click, 0.35f)
+        play(c, cur?.get(0) ?: click, 0.7f)
     }
 
     @JvmStatic
-    fun select(c: Context) { play(c, cur?.get(1) ?: select, 0.45f) }
+    fun select(c: Context) { play(c, cur?.get(1) ?: select, 0.9f) }
 
     @JvmStatic
-    fun chime(c: Context) { play(c, cur?.get(2) ?: chime, 0.5f) }
+    fun chime(c: Context) { play(c, cur?.get(2) ?: chime, 1f) }
 
     private fun play(c: Context, id: Int, vol: Float) {
         if (!enabled(c) || SystemClock.uptimeMillis() < quietUntil) return

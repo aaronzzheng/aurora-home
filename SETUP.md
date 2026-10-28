@@ -103,6 +103,8 @@ The phone and TV must be on the same Wi-Fi. If the TV has a Settings PIN, pairin
 
 Aurora then presses the buttons through the TV's own debugging connection. It only ever sends remote buttons.
 
+**Turning the TV on from the phone.** When the TV is asleep, the power button on the phone turns green and wakes it. This only works if the TV keeps its Wi-Fi on in standby. On most Google TVs that's **Settings → System → Power & energy**: turn off any low-power or "eco" standby, and turn on **Quick start**, **Network standby** or **Wake on Wi-Fi**, whichever your TV has. In a deep standby nothing on the network can reach the TV, so use its own remote.
+
 To see or remove paired phones, open **Settings → Phone remote → Paired phones**.
 
 <br clear="right">

@@ -31,6 +31,7 @@ public final class Tests {
     @org.junit.Test public void deviceNames() { section(Tests::names); }
     @org.junit.Test public void backupTypes() { section(Tests::backup); }
     @org.junit.Test public void backupKnowsEverySetting() { section(Tests::everyKey); }
+    @org.junit.Test public void solitaireDeals() { section(Tests::klondike); }
 
     private static void section(Runnable checks) {
         TimeZone before = TimeZone.getDefault();
@@ -211,5 +212,33 @@ public final class Tests {
         keys.remove("image_id");   // a field of the paintings' JSON, not a setting
         check("found the settings in the sources", keys.size() > 30);
         for (String k : keys) check("backup handles setting " + k, Backup.handles(k));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void klondike() {
+        Random r = new Random(11);
+        int found = 0;
+        for (int g = 0; g < 40; g++) {
+            java.util.List<Integer> d = new java.util.ArrayList<>();
+            for (int i = 0; i < 52; i++) d.add(i);
+            java.util.Collections.shuffle(d, r);
+            if (home.aurora.games.Klondike.winnable(d, 1, 20_000)) found++;
+        }
+        check("the search finds winnable deals often enough to deal one quickly (" + found + "/40)", found >= 5);
+
+        java.util.List<Integer>[] tab = new java.util.List[7], fnd = new java.util.List[4];
+        for (int i = 0; i < 7; i++) tab[i] = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) fnd[i] = new java.util.ArrayList<>();
+        int[] down = new int[7];
+        java.util.List<Integer> stock = new java.util.ArrayList<>(), waste = new java.util.ArrayList<>();
+        // Column 0: a face-down card under the 5 of spades (card 4); column 1: the 9 of clubs (47).
+        tab[0].add(20); tab[0].add(4); down[0] = 1;
+        tab[1].add(47);
+        check("nothing fits anywhere: no moves", !home.aurora.games.Klondike.anyMove(tab, down, fnd, stock, waste, 1));
+        stock.add(13);   // the ace of hearts is still in the stock
+        check("an ace waiting in the stock is a move", home.aurora.games.Klondike.anyMove(tab, down, fnd, stock, waste, 1));
+        stock.clear();
+        tab[1].add(18);  // the 6 of hearts on top of column 1: the 5 of spades can go on it and uncover a card
+        check("a run that uncovers a card is a move", home.aurora.games.Klondike.anyMove(tab, down, fnd, stock, waste, 1));
     }
 }

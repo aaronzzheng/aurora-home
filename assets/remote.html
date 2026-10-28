@@ -144,6 +144,7 @@
   .pad .ic { width: 30px; height: 30px; }
   .media .ic { width: 22px; height: 22px; }
   .power .ic { width: 22px; height: 22px; }
+  .power.asleep { color: #4cd07d; }
   .pad button { position: absolute; border: 0; background: transparent; color: var(--arrow); min-height: 0; padding: 0; font-size: 26px; border-radius: 50%; }
   .pad button:active, .pad button.pressed { background: var(--btn-press); transform: none; }
   .pad .up { left: 33%; top: 3%; width: 34%; height: 30%; }
@@ -438,9 +439,23 @@
     pad.addEventListener("touchend", () => { swiping = false; });
   })();
 
+  // One button: turns the TV off, or back on when it's asleep (if it kept its Wi-Fi up).
+  function showPower() {
+    const asleep = !!(state && state.on === false);
+    $("powerOff").classList.toggle("asleep", asleep);
+    $("powerOff").setAttribute("aria-label", asleep ? "Turn on TV" : "Turn off TV");
+  }
   $("powerOff").onclick = async () => {
+    if (state && state.on === false) {
+      try {
+        const r = await api("/api/on");
+        toast(r.ok ? "Turning the TV on" : r.error);
+        setTimeout(load, 2500);
+      } catch (e) { toast("Can't reach the TV. Its network may be off in standby (see the setup guide)."); }
+      return;
+    }
     if (!confirm("Turn off the TV?")) return;
-    try { await api("/api/off"); toast("TV is turning off"); } catch (e) { toast(e.message); }
+    try { await api("/api/off"); toast("TV is turning off"); setTimeout(load, 2500); } catch (e) { toast(e.message); }
   };
   $("inputs").onclick = () => api("/api/inputs").then(r => r.ok || toast(r.error));
 
@@ -561,6 +576,7 @@
       state = await api("/api/state", {}, "GET");
     } catch (e) { $("status").textContent = e.message; return; }
     applyTheme(state.theme);
+    showPower();
     if (state.full) $("stuckHint").hidden = true;
     const bits = [];
     if (state.sleep) bits.push("Sleep in " + fmtMin(state.sleep));

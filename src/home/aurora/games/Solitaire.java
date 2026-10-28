@@ -45,6 +45,8 @@ public class Solitaire extends Game {
     private int moves;
     private long startedAt;
     private boolean auto;
+    private boolean dealing;   // looking for a deal that can be won; the table waits
+    private int dealGen;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -70,11 +72,44 @@ public class Solitaire extends Game {
     static int rank(int card) { return card % 13; }
     static boolean red(int card) { return suit(card) == 1 || suit(card) == 2; }
 
+    private int draws() { return level == 2 ? 3 : 1; }
+
+    /**
+     * Many random Klondike deals can't be won, which feels like the game cheating. So shuffle
+     * on a background thread until a quick search finds a win (usually a few tries), then deal
+     * that one. After a few seconds without one, a plain shuffle is dealt rather than waiting.
+     */
     @Override
     protected void newGame() {
-        List<Integer> deck = new ArrayList<>();
-        for (int i = 0; i < 52; i++) deck.add(i);
-        Collections.shuffle(deck, rnd);
+        stock.clear();
+        waste.clear();
+        for (List<Integer> f : found) f.clear();
+        for (List<Integer> t : tab) t.clear();
+        heldRow = -1;
+        dealing = true;
+        removeCallbacks(tick);
+        removeCallbacks(autoStep);
+        final int g = ++dealGen;
+        final int draw = draws();
+        if (host != null) host.onInfo("Shuffling…");
+        new Thread(null, () -> {
+            long until = SystemClock.uptimeMillis() + 3000;
+            List<Integer> deck;
+            do {
+                deck = new ArrayList<>();
+                for (int i = 0; i < 52; i++) deck.add(i);
+                Collections.shuffle(deck, rnd);
+            } while (!Klondike.winnable(deck, draw, 20_000) && SystemClock.uptimeMillis() < until && g == dealGen);
+            final List<Integer> chosen = deck;
+            post(() -> { if (g == dealGen) deal(chosen); });
+        }, "solitaire-deal", 4 << 20).start();
+        invalidate();
+    }
+
+    @Override protected boolean busy() { return dealing; }
+
+    private void deal(List<Integer> deck) {
+        dealing = false;
         stock.clear();
         waste.clear();
         for (List<Integer> f : found) f.clear();
@@ -92,6 +127,7 @@ public class Solitaire extends Game {
         removeCallbacks(tick);
         post(tick);
         if (host != null) host.onInfo("Build each suit up from Ace to King");
+        invalidate();
     }
 
     private void report() {
@@ -191,6 +227,8 @@ public class Solitaire extends Game {
             for (int d : down) if (d > 0) allUp = false;
             if (allUp) { auto = true; host.onInfo("Finishing…"); postDelayed(autoStep, 150); }
         }
+        if (!auto && !Klondike.anyMove(tab, down, found, stock, waste, draws()))
+            host.onInfo("No moves left  ·  Back, then New game for a fresh deal");
     }
 
     private final Runnable autoStep = new Runnable() {
@@ -235,6 +273,7 @@ public class Solitaire extends Game {
 
     @Override
     protected void onDetachedFromWindow() {
+        dealGen++;
         removeCallbacks(tick);
         removeCallbacks(autoStep);
         super.onDetachedFromWindow();
@@ -246,7 +285,7 @@ public class Solitaire extends Game {
     protected void onResumed(long pausedMs) {
         startedAt += pausedMs;   // time in a menu doesn't count
         removeCallbacks(tick);
-        if (!over) post(tick);
+        if (!over && !dealing) post(tick);
     }
 
     private int firstUp(int c) { return Math.min(down[c], Math.max(0, tab[c].size() - 1)); }

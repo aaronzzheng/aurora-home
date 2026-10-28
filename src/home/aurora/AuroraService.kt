@@ -605,6 +605,20 @@ class AuroraService : AccessibilityService() {
 
     fun home() { performGlobalAction(GLOBAL_ACTION_HOME) }
 
+    /**
+     * Wake the TV from standby (the phone's power button when the TV is off). Works while the
+     * TV keeps its network up in standby; with "Arrows in every app" on, a real wake-up key
+     * press backs it up for TVs that ignore a wake lock.
+     */
+    fun wake(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isInteractive) return true
+        @Suppress("DEPRECATION")
+        pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "aurora:phone").acquire(10_000)
+        if (fullRemote()) adb().press(KeyEvent.KEYCODE_WAKEUP)
+        return true
+    }
+
     fun media(keycode: Int) {
         audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keycode))
         audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keycode))

@@ -117,8 +117,8 @@ public class Minesweeper extends Game {
     }
 
     private void reveal(int i) {
+        if (flag[i]) return;   // before placing: OK on a flag mustn't lay the mines and start the clock
         if (!placed) place(i);
-        if (flag[i]) return;
         if (open[i]) { chord(i); return; }
         if (mine[i]) { lose(i); return; }
         ArrayDeque<Integer> q = new ArrayDeque<>();

@@ -336,6 +336,7 @@ class RemoteServer(private val svc: AuroraService, private val port: Int) {
                 }
                 json(out, 200, ok())
             }
+            "/api/on" -> json(out, 200, if (onMain { svc.wake() }) ok() else err("The TV didn't wake up"))
             "/api/off" -> {
                 json(out, 200, ok())
                 out.flush()
@@ -392,6 +393,7 @@ class RemoteServer(private val svc: AuroraService, private val port: Int) {
         val h = svc.habits
         return ok()
             .put("theme", HomeTheme.current(svc).id)
+            .put("on", (svc.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive)
             .put("full", svc.fullRemote())
             .put("apps", list)
             .put("sleep", svc.sleepLeft())

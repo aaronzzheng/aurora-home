@@ -39,7 +39,12 @@ public class Chess extends Game {
             for (int v : b) h = h * 1_000_003L + v;
             if (ep >= 0) {
                 int pawn = side * 8 + P, r = ep / 8 + (side == 1 ? 1 : -1), c = ep % 8;
-                if ((c > 0 && b[r * 8 + c - 1] == pawn) || (c < 7 && b[r * 8 + c + 1] == pawn)) h = h * 131 + ep + 1;
+                // only counts if the capture is actually legal (not if the capturing pawn is pinned)
+                for (int dc = -1; dc <= 1; dc += 2) {
+                    int from = r * 8 + c + dc;
+                    if (c + dc < 0 || c + dc > 7 || b[from] != pawn) continue;
+                    if (!inCheck(make(this, new Move(from, ep, 0)), side)) { h = h * 131 + ep + 1; break; }
+                }
             }
             return h;
         }
@@ -349,7 +354,8 @@ public class Chess extends Game {
             Move best = null;
             int bestScore = Integer.MIN_VALUE, alpha = -1_000_000;
             for (Move m : ms) {
-                int s = -search(make(snap, m), depth - 1, -1_000_000, -alpha);
+                // the +1 keeps a tie exact: a reply that only proves "no better than alpha" scores below it
+                int s = -search(make(snap, m), depth - 1, -1_000_000, -alpha + 1);
                 if (s > bestScore || (s == bestScore && Math.random() < 0.25)) { bestScore = s; best = m; }
                 if (s > alpha) alpha = s;
             }
